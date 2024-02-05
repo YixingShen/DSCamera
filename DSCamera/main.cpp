@@ -146,25 +146,25 @@ int main(int argc, char **argv)
     int frameWidth = DEFAULT_FRAME_WIDTH;
     int frameHeight = DEFAULT_FRAME_HEIGHT;
     GUID frameSubtype = DEFAULT_FRAME_SUBTYPE;
-    char* Subtype = "";
+    char* videoType = "";
     DeviceList dlist;
 
     if (argc >= 2) deviceIndex = strtol(argv[1], NULL, 10);
-    if (argc >= 3) Subtype = argv[2];
+    if (argc >= 3) videoType = argv[2];
     if (argc >= 4) frameWidth = strtol(argv[3], NULL, 10);
     if (argc >= 5) frameHeight = strtol(argv[4], NULL, 10);
     if (argc >= 6) frameRate = strtol(argv[5], NULL, 10);
     if (argc >= 7) streamIndex = strtol(argv[6], NULL, 10);
 
-    if (strcmp(Subtype, "YUY2") == 0 || \
-        strcmp(Subtype, "YUV") == 0 || \
-        strcmp(Subtype, "YUYV") == 0)
+    if (strcmp(videoType, "YUY2") == 0 || \
+        strcmp(videoType, "YUV") == 0 || \
+        strcmp(videoType, "YUYV") == 0)
     {
         frameSubtype = MEDIASUBTYPE_YUY2;
     }
-    if (strcmp(Subtype, "MJPG") == 0 || \
-        strcmp(Subtype, "MJPEG") == 0 || \
-        strcmp(Subtype, "JPEG") == 0) {
+    if (strcmp(videoType, "MJPG") == 0 || \
+        strcmp(videoType, "MJPEG") == 0 || \
+        strcmp(videoType, "JPEG") == 0) {
         frameSubtype = MEDIASUBTYPE_MJPG;
     }
 
