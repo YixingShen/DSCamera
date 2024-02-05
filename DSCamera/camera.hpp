@@ -53,13 +53,13 @@ void CameraGetDeviceList(DeviceList *list);
 
 bool CameraSetDevice(int deviceIndex);
 
-void CameraGetFormatList(FormatList *list);
+//void CameraGetFormatList(FormatList *list);
 
-bool CameraSetFormat(int formatIndex);
+//bool CameraSetFormat(int formatIndex);
 
-bool CameraSetFrameRate(int frameRate);
+//bool CameraSetFrameRate(int frameRate);
 
-bool CameraGetFormat(Format* format);
+//bool CameraGetFormat(Format* format);
 
 void CameraSetVideoCallback(VideoCallbackFunc callback);
 

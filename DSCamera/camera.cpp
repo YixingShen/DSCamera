@@ -417,7 +417,7 @@ static HRESULT SetMediaFormat(int formatIndex)
     return hr;
 }
 
-static HRESULT SetFrameRate(int frameRate)
+static HRESULT SetMediaFrameRate(int frameRate)
 {
     HRESULT hr;
 
