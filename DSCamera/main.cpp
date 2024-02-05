@@ -19,10 +19,12 @@
 
 #pragma comment(lib, "Shlwapi.lib")
 
-#define REQUIRE_DEVICE_IDX   0
-#define REQUIRE_FORTMAT_IDX  0
-#define REQUIRE_STREAM_IDX   0
-#define REQUIRE_FRAME_RATE   30
+#define DEFAULT_DEVICE_IDX    0
+#define DEFAULT_STREAM_IDX    0
+#define DEFAULT_FRAME_RATE    30
+#define DEFAULT_FRAME_WIDTH   320
+#define DEFAULT_FRAME_HEIGHT  240
+#define DEFAULT_FRAME_SUBTYPE MEDIASUBTYPE_YUY2
 #define SAVE_FRAME_DIR       L"./saveframe"
 
 using namespace std;
@@ -32,7 +34,7 @@ using namespace cv;
 static Format framefmt;
 static bool saveFrameExecute = false;
 static bool showFrameExecute = true;
-static cv::Mat cvFrameRGB(320, 320, CV_32F, cv::Scalar::all(0));
+static cv::Mat cvFrameRGB(320, 240, CV_32F, cv::Scalar::all(0));
 
 void saveFrame(int32_t frameIndex, GUID subtyep, BYTE *pBuffer, long lBufferSize)
 {
@@ -137,22 +139,33 @@ int videoCallback(double time, BYTE *buff, LONG len)
 
 int main(int argc, char **argv)
 {  
-    int deviceIndex = REQUIRE_DEVICE_IDX;
-    int formatIndex = REQUIRE_FORTMAT_IDX;
-    int streamIndex = REQUIRE_STREAM_IDX;
-    int frameRate = REQUIRE_FRAME_RATE;
-
+    int deviceIndex = DEFAULT_DEVICE_IDX;
+    int streamIndex = DEFAULT_STREAM_IDX;
+    int frameRate = DEFAULT_FRAME_RATE;
+    int frameWidth = DEFAULT_FRAME_WIDTH;
+    int frameHeight = DEFAULT_FRAME_HEIGHT;
+    GUID frameSubtype = DEFAULT_FRAME_SUBTYPE;
+    char* Subtype = "";
     DeviceList dlist;
-    FormatList flist;
 
-    if (argc >= 2)
-        deviceIndex = strtol(argv[1], NULL, 10);
+    if (argc >= 2) deviceIndex = strtol(argv[1], NULL, 10);
+    if (argc >= 3) Subtype = argv[2];
+    if (argc >= 4) frameWidth = strtol(argv[3], NULL, 10);
+    if (argc >= 5) frameHeight = strtol(argv[4], NULL, 10);
+    if (argc >= 6) frameRate = strtol(argv[5], NULL, 10);
+    if (argc >= 7) streamIndex = strtol(argv[6], NULL, 10);
 
-    if (argc >= 3)
-        formatIndex = strtol(argv[2], NULL, 10);
-
-    if (argc >= 4)
-        streamIndex = strtol(argv[3], NULL, 10);
+    if (strcmp(Subtype, "YUY2") == 0 || \
+        strcmp(Subtype, "YUV") == 0 || \
+        strcmp(Subtype, "YUYV") == 0)
+    {
+        frameSubtype = MEDIASUBTYPE_YUY2;
+    }
+    if (strcmp(Subtype, "MJPG") == 0 || \
+        strcmp(Subtype, "MJPEG") == 0 || \
+        strcmp(Subtype, "JPEG") == 0) {
+        frameSubtype = MEDIASUBTYPE_MJPG;
+    }
 
     if (PathIsDirectory(SAVE_FRAME_DIR))
         saveFrameExecute = true;
@@ -193,63 +206,46 @@ int main(int argc, char **argv)
         goto End;
     }
 
-    ZeroMemory(&flist, sizeof(FormatList));
-    CameraGetFormatList(&flist);
+    printf("set video callback\n");
+    CameraSetVideoCallback(videoCallback);
 
-    printf("list format:\n");
-
-    for (int idx = 0; idx < flist.FormatNum; idx++) {
-        GUID MediaType = flist.FormatItems[idx].MediaSubtype;
-        UINT Width = flist.FormatItems[idx].Width;
-        UINT Height = flist.FormatItems[idx].Height;
-        LONGLONG AvgTimePerFrame = flist.FormatItems[idx].AvgTimePerFrame;
-
-        printf(" format[%d] \n", idx);
-        printf("  w:%d h:%d fps:%d subtype:%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X\n",
-            Width, Height, 10000000 / AvgTimePerFrame,
-            MediaType.Data1, MediaType.Data2, MediaType.Data3,
-            MediaType.Data4[0],
-            MediaType.Data4[1],
-            MediaType.Data4[2],
-            MediaType.Data4[3],
-            MediaType.Data4[4],
-            MediaType.Data4[5],
-            MediaType.Data4[6],
-            MediaType.Data4[7]);
-    }
-
-    printf("request fomat[%d]\n", formatIndex);
-    ret = CameraSetFormat(formatIndex);
+    printf("open stream[%d]\n", streamIndex);
+    ret = CameraOpenStream(streamIndex);
 
     if (!ret) {
-        printf("failed to SetFormat(%d) !\n", formatIndex);
+        printf("failed to OpenStream(%d) !\n", streamIndex);
         goto End;
     }
 
-    printf("request frame rate %d\n", frameRate);
-    ret = CameraSetFrameRate(frameRate);
+    ret = CameraSetGrabFormat(frameWidth, frameHeight, frameSubtype);
 
     if (!ret) {
-        printf("failed to SetFrameRate(%d) !\n", frameRate);
+        printf("failed to SetGrabFormat !\n");
+        goto End;
+    }
+    
+    ret = CameraSetGrabFrameRate(frameRate);
+    if (!ret) {
+        printf("failed to SetGrabFrameRate !\n");
         goto End;
     }
 
-    printf("get current format\n");
+    printf("get current grabber format\n");
     ZeroMemory(&framefmt, sizeof(framefmt));
-    ret = CameraGetFormat(&framefmt);
+    ret = CameraGetGrabFormat(&framefmt);
 
     if (!ret) {
         printf("Failed to GetFormat !\n");
         goto End;
     }
 
-    GUID frameSubtype = framefmt.MediaSubtype;
-    int frameWidth = framefmt.Width;
-    int frameHeight = framefmt.Height;
-    LONGLONG AvgTimePerFrame = framefmt.AvgTimePerFrame;
+    frameSubtype = framefmt.MediaSubtype;
+    frameWidth = framefmt.Width;
+    frameHeight = framefmt.Height;
+    frameRate = 10000000 / framefmt.AvgTimePerFrame;
 
     printf(" w:%d h:%d fps:%d\n",
-        frameWidth, frameHeight, 10000000 / AvgTimePerFrame);
+        frameWidth, frameHeight, frameRate);
     printf(" subtype:%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X\n",
         frameSubtype.Data1, frameSubtype.Data2, frameSubtype.Data3,
         frameSubtype.Data4[0],
@@ -261,17 +257,13 @@ int main(int argc, char **argv)
         frameSubtype.Data4[6],
         frameSubtype.Data4[7]);
 
-    printf("set video callback\n");
-    CameraSetVideoCallback(videoCallback);
-
-    printf("open stream\n");
-    ret = CameraOpenStream(streamIndex);
+    printf("start stream\n");
+    ret = CameraStartStream();
 
     if (!ret) {
-        printf("failed to OpenStream(%d) !\n", streamIndex);
+        printf("failed to StartStream !\n");
         goto End;
     }
-
 End:
 
     while (1) {

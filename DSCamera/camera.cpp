@@ -442,6 +442,30 @@ static HRESULT SetFrameRate(int frameRate)
     return hr;
 }
 
+static HRESULT GetGrabFormat(AM_MEDIA_TYPE* mediatype)
+{
+    HRESULT hr;
+
+    AM_MEDIA_TYPE pmt;
+    hr = g_pGrabber->GetConnectedMediaType(&pmt);
+    CHECK_HR_GO_DONE(hr);
+
+    CopyMemory(mediatype, &pmt, sizeof(AM_MEDIA_TYPE));
+    FreeMediaType(pmt);
+done:
+    return hr;
+}
+
+static HRESULT SetGrabFormat(AM_MEDIA_TYPE* mediatype)
+{
+    HRESULT hr;
+
+    hr = g_pGrabber->SetMediaType(mediatype);
+    CHECK_HR_GO_DONE(hr);
+done:
+    return hr;
+}
+
 static HRESULT EnumDevice(void)
 {
     HRESULT hr;
@@ -617,6 +641,40 @@ bool CameraStopStream(void)
     return true;
 }
 
+bool CameraStartStream(void)
+{
+    HRESULT hr;
+
+    if (g_InitOK == false)
+        return false;
+
+    if (g_IsOpened) {
+        if (g_pMC)
+            g_pMC->Run();
+
+        return true;
+    }
+
+    // CALLBACKMODE == 1
+    {
+        hr = g_pGrabber->SetOneShot(FALSE);
+        CHECK_HR_RET_FALSE(hr);
+
+        hr = g_pGrabber->SetBufferSamples(FALSE);
+        CHECK_HR_RET_FALSE(hr);
+
+        int nMode = 1; //0--SampleCB,1--BufferCB
+        hr = g_pGrabber->SetCallback(g_pSampleGrabCallback, nMode);
+        CHECK_HR_RET_FALSE(hr);
+    }
+
+    g_IsOpened = TRUE;
+    hr = g_pMC->Run();
+    CHECK_HR_RET_FALSE(hr);
+
+    return true;
+}
+
 bool CameraOpenStream(int srcPinOut)
 {
     HRESULT hr;
@@ -690,25 +748,6 @@ bool CameraOpenStream(int srcPinOut)
 
     pNullF->Release();
     pGrabberF->Release();
-
-    // CALLBACKMODE == 1
-    {
-        hr = g_pGrabber->SetOneShot(FALSE);
-        CHECK_HR_RET_FALSE(hr);
-
-        hr = g_pGrabber->SetBufferSamples(FALSE);
-        CHECK_HR_RET_FALSE(hr);
-
-        int nMode = 1; //0--SampleCB,1--BufferCB
-        hr = g_pGrabber->SetCallback(g_pSampleGrabCallback, nMode);
-        CHECK_HR_RET_FALSE(hr);
-    }
-
-    g_IsOpened = TRUE;
-    hr = g_pMC->Run();
-    CHECK_HR_RET_FALSE(hr);
-
-    return true;
 }
 
 bool CameraSetDevice(int deviceIndex)
@@ -747,7 +786,140 @@ bool CameraSetFrameRate(int frameRate)
 
     HRESULT hr;
 
-    hr = SetFrameRate(frameRate);
+    hr = SetMediaFrameRate(frameRate);
+    CHECK_HR_RET_FALSE(hr);
+
+    return true;
+}
+
+bool CameraSetDeviceStream(int deviceIndex, int srcPinOut)
+{
+    if (g_InitOK == false)
+        return false;
+
+    HRESULT hr;
+
+    hr = BindSrcFilter(deviceIndex, &g_pSrcFilter);
+    CHECK_HR_RET_FALSE(hr);
+
+    hr = g_pGraph->AddFilter(g_pSrcFilter, L"Video Filter");
+    CHECK_HR_RET_FALSE(hr);
+
+    IBaseFilter *pGrabberF;
+    IBaseFilter *pNullF;
+
+    hr = g_pGraph->QueryInterface(IID_IMediaControl, (LPVOID*)&g_pMC);
+    CHECK_HR_RET_FALSE(hr);
+
+    hr = g_pGraph->QueryInterface(IID_IMediaEventEx, (LPVOID*)&g_pME);
+    CHECK_HR_RET_FALSE(hr);
+
+    hr = g_pCapture->SetFiltergraph(g_pGraph);
+    CHECK_HR_RET_FALSE(hr);
+
+    hr = CoCreateInstance(CLSID_SampleGrabber, NULL, CLSCTX_INPROC_SERVER, IID_IBaseFilter, (LPVOID*)&pGrabberF);
+    CHECK_HR_RET_FALSE(hr);
+
+    hr = g_pGraph->AddFilter(pGrabberF, L"Sample Grabber");
+    CHECK_HR_RET_FALSE(hr);
+
+    hr = pGrabberF->QueryInterface(IID_ISampleGrabber, (LPVOID*)&g_pGrabber);
+    CHECK_HR_RET_FALSE(hr);
+
+    hr = CoCreateInstance(CLSID_NullRenderer, NULL, CLSCTX_INPROC_SERVER, IID_IBaseFilter, (void**)(&pNullF));
+    CHECK_HR_RET_FALSE(hr);
+
+    hr = g_pGraph->AddFilter(pNullF, L"NullRenderer");
+    CHECK_HR_RET_FALSE(hr);
+
+    // connect source filter to grabber filter
+#if 0
+    hr = g_pCapture->RenderStream(&PIN_CATEGORY_CAPTURE, &MEDIATYPE_Video,
+        g_pSrcFilter, pGrabberF, pNullF);
+    CHECK_HR_RET_FALSE(hr);
+#else
+    IPin *pSrcPinOut = NULL;
+    IPin *pGrabPinIn = NULL;
+    IPin *pGrabPinOut = NULL;
+    IPin *pRenderPinIn = NULL;
+
+    hr = FindPinByIndex(g_pSrcFilter, PINDIR_OUTPUT, srcPinOut, &pSrcPinOut);
+    CHECK_HR_RET_FALSE(hr);
+
+    hr = FindPinByName(pGrabberF, PINDIR_INPUT, &pGrabPinIn, "Input");
+    CHECK_HR_RET_FALSE(hr);
+
+    hr = FindPinByName(pGrabberF, PINDIR_OUTPUT, &pGrabPinOut, "Output");
+    CHECK_HR_RET_FALSE(hr);
+
+    hr = FindPinByName(pNullF, PINDIR_INPUT, &pRenderPinIn, "In");
+    CHECK_HR_RET_FALSE(hr);
+
+    hr = g_pGraph->Connect(pSrcPinOut, pGrabPinIn);
+    CHECK_HR_RET_FALSE(hr);
+
+    hr = g_pGraph->Connect(pGrabPinOut, pRenderPinIn);
+    CHECK_HR_RET_FALSE(hr);
+#endif
+
+    pNullF->Release();
+    pGrabberF->Release();
+
+    return true;
+}
+
+bool CameraGetGrabFormat(Format* format)
+{
+    if (g_InitOK == false)
+        return false;
+
+    AM_MEDIA_TYPE mediatype;
+    HRESULT hr = GetGrabFormat(&mediatype);
+    CHECK_HR_RET_FALSE(hr);
+
+    VIDEOINFOHEADER *pVih = (VIDEOINFOHEADER*)mediatype.pbFormat;
+    format->Width = pVih->bmiHeader.biWidth;
+    format->Height = pVih->bmiHeader.biHeight;
+    format->MediaSubtype = mediatype.subtype;
+    format->AvgTimePerFrame = pVih->AvgTimePerFrame;
+    return true;
+}
+
+bool CameraSetGrabFormat(int Width, int Height, GUID MediaSubtype)
+{
+    if (g_InitOK == false)
+        return false;
+
+    AM_MEDIA_TYPE mediatype;
+    HRESULT hr = GetGrabFormat(&mediatype);
+    CHECK_HR_RET_FALSE(hr);
+
+    VIDEOINFOHEADER *pVih = (VIDEOINFOHEADER*)mediatype.pbFormat;
+    
+    pVih->bmiHeader.biWidth = Width;
+    pVih->bmiHeader.biHeight = Height;
+    mediatype.subtype = MediaSubtype;
+   // pVih->AvgTimePerFrame = (LONGLONG)(10000000 / frameRate);
+
+    hr = SetGrabFormat(&mediatype);
+    CHECK_HR_RET_FALSE(hr);
+
+    return true;
+}
+
+bool CameraSetGrabFrameRate(int frameRate)
+{
+    if (g_InitOK == false)
+        return false;
+
+    AM_MEDIA_TYPE mediatype;
+    HRESULT hr = GetGrabFormat(&mediatype);
+    CHECK_HR_RET_FALSE(hr);
+
+    VIDEOINFOHEADER *pVih = (VIDEOINFOHEADER*)mediatype.pbFormat;
+    pVih->AvgTimePerFrame = (LONGLONG)(10000000 / frameRate);
+
+    hr = SetGrabFormat(&mediatype);
     CHECK_HR_RET_FALSE(hr);
 
     return true;

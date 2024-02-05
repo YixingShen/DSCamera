@@ -69,4 +69,14 @@ bool CameraStopStream(void);
 
 void CameraCloseInterface(void);
 
+bool CameraSetDeviceStream(int deviceIndex, int srcPinOut);
+
+bool CameraStartStream(void);
+
+bool CameraGetGrabFormat(Format* format);
+
+bool CameraSetGrabFormat(int Width, int Height, GUID MediaSubtype);
+
+bool CameraSetGrabFrameRate(int frameRate);
+
 #endif
