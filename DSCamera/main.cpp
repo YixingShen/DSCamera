@@ -25,7 +25,8 @@
 #define DEFAULT_FRAME_WIDTH   320
 #define DEFAULT_FRAME_HEIGHT  240
 #define DEFAULT_FRAME_SUBTYPE MEDIASUBTYPE_YUY2
-#define SAVE_FRAME_DIR       L"./saveframe"
+
+#define SAVE_FRAME_DIR        L"./saveframe"
 
 using namespace std;
 using namespace chrono;
@@ -34,7 +35,7 @@ using namespace cv;
 static Format framefmt;
 static bool saveFrameExecute = false;
 static bool showFrameExecute = true;
-static cv::Mat cvFrameRGB(320, 240, CV_32F, cv::Scalar::all(0));
+static cv::Mat cvFrameRGB(DEFAULT_FRAME_HEIGHT, DEFAULT_FRAME_WIDTH, CV_32F, cv::Scalar::all(0));
 
 void saveFrame(int32_t frameIndex, GUID subtyep, BYTE *pBuffer, long lBufferSize)
 {
