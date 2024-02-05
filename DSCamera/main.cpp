@@ -164,7 +164,8 @@ int main(int argc, char **argv)
     }
     if (strcmp(videoType, "MJPG") == 0 || \
         strcmp(videoType, "MJPEG") == 0 || \
-        strcmp(videoType, "JPEG") == 0) {
+        strcmp(videoType, "JPEG") == 0)
+    {
         frameSubtype = MEDIASUBTYPE_MJPG;
     }
 
