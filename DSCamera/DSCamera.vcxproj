@@ -160,6 +160,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="camera.hpp" />
+    <ClInclude Include="getopt.h" />
     <ClInclude Include="qedit.h" />
     <ClInclude Include="SampleGrabberCB.hpp" />
   </ItemGroup>

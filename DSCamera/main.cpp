@@ -10,6 +10,7 @@
 #include "ks.h"
 #include "ksmedia.h"
 #include "camera.hpp"
+#include "getopt.h"
 
 #if _DEBUG
 #pragma comment(lib, "../opencv/build/x64/vc14/lib/opencv_world460d.lib")
@@ -138,6 +139,31 @@ int videoCallback(double time, BYTE *buff, LONG len)
     return 0;
 }
 
+static const char *shortopts = "t:d:s:w:h:f";
+
+static struct option long_options[] = {
+    { "help",   no_argument,       NULL, '?' },
+    { "type",   required_argument, NULL, 't' },
+    { "device", required_argument, NULL, 'd' },
+    { "stream", required_argument, NULL, 's' },
+    { "width",  required_argument, NULL, 'w' },
+    { "height", required_argument, NULL, 'h' },
+    { "framerate",    required_argument, NULL, 'f' },
+    { 0 ,0, 0, 0 }
+};
+
+void usage() {
+    printf("Usage: DSCamera\n");
+    printf("Options:\n");
+    printf(" -d --device    device index (default=0)\n");
+    printf(" -t --type      video type (default=YUY2)\n");
+    printf(" -s --stream    video stream index (default=0)\n");
+    printf(" -w --width     video width\n");
+    printf(" -h --height    video height\n");
+    printf(" -f --framerate video frame rate (default=30)\n");
+    printf(" --help         This message\n");
+}
+
 int main(int argc, char **argv)
 {  
     int deviceIndex = DEFAULT_DEVICE_IDX;
@@ -148,23 +174,54 @@ int main(int argc, char **argv)
     GUID frameSubtype = DEFAULT_FRAME_SUBTYPE;
     char* videoType = "";
     DeviceList dlist;
+    int opt;
+    int cnt = 0;
 
-    if (argc >= 2) deviceIndex = strtol(argv[1], NULL, 10);
-    if (argc >= 3) videoType = argv[2];
-    if (argc >= 4) frameWidth = strtol(argv[3], NULL, 10);
-    if (argc >= 5) frameHeight = strtol(argv[4], NULL, 10);
-    if (argc >= 6) frameRate = strtol(argv[5], NULL, 10);
-    if (argc >= 7) streamIndex = strtol(argv[6], NULL, 10);
+    while ((opt = getopt_long(argc, argv, shortopts, long_options, NULL)) != EOF)
+    {
+        //printf("proces index:%d\n", optind);
+        //printf("option arg:%s\n", optarg);
 
-    if (strcmp(videoType, "YUY2") == 0 || \
-        strcmp(videoType, "YUV") == 0 || \
-        strcmp(videoType, "YUYV") == 0)
+        switch (opt)
+        {
+        case 't':
+            videoType = optarg;
+            break;
+        case 'd':
+            deviceIndex = strtol(optarg, NULL, 10);
+            break;
+        case 's':
+            streamIndex = strtol(optarg, NULL, 10);
+            break;
+        case 'i':
+            streamIndex = strtol(optarg, NULL, 10);
+            break;
+        case 'f':
+            frameRate = strtol(optarg, NULL, 10);
+            break;
+        case 'w':
+            frameWidth = strtol(optarg, NULL, 10);
+            break;
+        case 'h':
+            frameHeight = strtol(optarg, NULL, 10);
+            break;
+        case '?':
+        default:
+            usage();
+            /* NOTREACHED */
+            break;
+        }
+    }
+
+    if (!strcmp(videoType, "YUY2") || \
+        !strcmp(videoType, "YUV") || \
+        !strcmp(videoType, "YUYV"))
     {
         frameSubtype = MEDIASUBTYPE_YUY2;
     }
-    if (strcmp(videoType, "MJPG") == 0 || \
-        strcmp(videoType, "MJPEG") == 0 || \
-        strcmp(videoType, "JPEG") == 0)
+    if (!strcmp(videoType, "MJPG") || \
+        !strcmp(videoType, "MJPEG") || \
+        !strcmp(videoType, "JPEG"))
     {
         frameSubtype = MEDIASUBTYPE_MJPG;
     }
