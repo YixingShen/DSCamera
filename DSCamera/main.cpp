@@ -152,7 +152,7 @@ static struct option long_options[] = {
     { 0 ,0, 0, 0 }
 };
 
-void usage() {
+void usage_long_options() {
     printf("Usage: DSCamera\n");
     printf("Options:\n");
     printf(" --device    specify device index (default=0)\n");
