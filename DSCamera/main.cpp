@@ -155,13 +155,16 @@ static struct option long_options[] = {
 void usage() {
     printf("Usage: DSCamera\n");
     printf("Options:\n");
-    printf(" -d --device    device index (default=0)\n");
-    printf(" -t --type      video type (default=YUY2)\n");
-    printf(" -s --stream    video stream index (default=0)\n");
-    printf(" -w --width     video width\n");
-    printf(" -h --height    video height\n");
-    printf(" -f --framerate video frame rate (default=30)\n");
-    printf(" --help         This message\n");
+    printf(" --device    specify device index (default=0)\n");
+    printf(" --type      request video type (default=YUY2)\n");
+    printf(" --stream    specify video stream index (default=0)\n");
+    printf(" --width     request video width (default=320)\n");
+    printf(" --height    request video height (default=240)\n");
+    printf(" --framerate request video frame rate (default=30)\n");
+    printf(" --help      This message\n");
+    printf("\n");
+    printf("Example:\n");
+    printf(" DSCamera --device=0 --type=YUY2 --framerate=30\n");
 }
 
 int main(int argc, char **argv)
@@ -177,7 +180,8 @@ int main(int argc, char **argv)
     int opt;
     int cnt = 0;
 
-    while ((opt = getopt_long(argc, argv, shortopts, long_options, NULL)) != EOF)
+    //while ((opt = getopt_long(argc, argv, shortopts, long_options, NULL)) != EOF)
+    while ((opt = getopt_long(argc, argv, "", long_options, NULL)) != EOF)
     {
         //printf("proces index:%d\n", optind);
         //printf("option arg:%s\n", optarg);
@@ -207,7 +211,7 @@ int main(int argc, char **argv)
             break;
         case '?':
         default:
-            usage();
+            usage_long_options();
             /* NOTREACHED */
             break;
         }
