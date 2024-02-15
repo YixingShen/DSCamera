@@ -76,7 +76,7 @@ void showFrame(int32_t frameIndex, int width, int height, GUID subtyep, BYTE *pB
     else {
         if (subtyep == MEDIASUBTYPE_NV12) {
             cv::Mat src(height * 12 / 8, width, CV_8UC1, (void*)pBuffer);
-            cv::cvtColor(src, cvFrameRGB, cv::COLOR_YUV2RGB_NV12);
+            cv::cvtColor(src, cvFrameRGB, cv::COLOR_YUV2BGR_NV12);
             winname = "NV12";
         }
         else if (subtyep == MEDIASUBTYPE_YUY2) { //YUY2
@@ -127,13 +127,13 @@ static struct option long_options[] = {
 void usage_long_options() {
     printf("Usage: DSCamera\n");
     printf("Options:\n");
-    printf(" --device    specify device index (default=0)\n");
-    printf(" --type      request video type (default=YUY2)\n");
-    printf(" --stream    specify video stream index (default=0)\n");
-    printf(" --width     request video width (default=320)\n");
-    printf(" --height    request video height (default=240)\n");
-    printf(" --framerate request video frame rate (default=30)\n");
-    printf(" --help      This message\n");
+    printf(" --device DEVICE          specify device index (default=0)\n");
+    printf(" --type {YUY2,NV12,MJPG}  request video type (default=YUY2)\n");
+    printf(" --stream STREAM          specify video stream index (default=0)\n");
+    printf(" --width WIDTH            request video width (default=320)\n");
+    printf(" --height HEIGHT          request video height (default=240)\n");
+    printf(" --framerate FRAMERATE    request video frame rate (default=30)\n");
+    printf(" --help                   help message\n");
     printf("\n");
     printf("Example:\n");
     printf(" DSCamera --device=0 --type=YUY2 --framerate=30\n");
@@ -195,11 +195,15 @@ int main(int argc, char **argv)
     {
         frameSubtype = MEDIASUBTYPE_YUY2;
     }
-    if (!strcmp(videoType, "MJPG") || \
-        !strcmp(videoType, "MJPEG") || \
-        !strcmp(videoType, "JPEG"))
+    else if (!strcmp(videoType, "MJPG") || \
+             !strcmp(videoType, "MJPEG") || \
+             !strcmp(videoType, "JPEG"))
     {
         frameSubtype = MEDIASUBTYPE_MJPG;
+    }
+    else if (!strcmp(videoType, "NV12"))
+    {
+        frameSubtype = MEDIASUBTYPE_NV12;
     }
 
     if (PathIsDirectory(SAVE_FRAME_DIR))
