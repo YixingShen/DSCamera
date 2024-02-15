@@ -1,4 +1,5 @@
 #include "camera.hpp"
+#include <iostream>
 
 #pragma comment(lib, "strmiids")
 
@@ -49,7 +50,7 @@ static bool g_InitOK;
 static bool g_IsOpened;
 static FormatList g_FormatList;
 static DeviceList g_DeviceList;
-
+#if 1
 //Converting a WChar string to a Ansi string
 std::string WChar2Ansi(LPCWSTR pwszSrc)
 {
@@ -100,7 +101,7 @@ std::wstring s2ws(const string& s)
 {
     return Ansi2WChar(s.c_str(), s.size());
 }
-
+#endif
 HRESULT FindPinByName(IBaseFilter * inFilter, PIN_DIRECTION PinDir, IPin **ppPin, const char * inPartialName)
 {
     bool bFound = false;

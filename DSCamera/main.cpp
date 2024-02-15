@@ -37,6 +37,9 @@ static Format framefmt;
 static bool saveFrameExecute = false;
 static bool showFrameExecute = true;
 static cv::Mat cvFrameRGB(DEFAULT_FRAME_HEIGHT, DEFAULT_FRAME_WIDTH, CV_32F, cv::Scalar::all(0));
+static BYTE *cpBuffer;
+static LONG cpBufferLen = 0;
+static LONG cpBufferLenMax = 0;
 
 void saveFrame(int32_t frameIndex, GUID subtyep, BYTE *pBuffer, long lBufferSize)
 {
@@ -85,7 +88,7 @@ void showFrame(int32_t frameIndex, int width, int height, GUID subtyep, BYTE *pB
         //cv::resize(cvFrameRGB, cvFrameRGB, Size(width * 2, height * 2), 0, 0, INTER_NEAREST);
     }
 
-End:
+//End:
 
     cv::namedWindow(winname, WINDOW_AUTOSIZE);
     cv::imshow(winname, cvFrameRGB);
@@ -98,44 +101,13 @@ End:
     }
 }
 
-int videoCallback(double time, BYTE *buff, LONG len)
+static int videoCallback(double time, BYTE *buff, LONG len)
 {
-    static auto last_time = system_clock::now();
-    static int32_t frameCount = 0;
-
-    auto cur_time = system_clock::now();
-    auto dt = duration_cast<milliseconds>(cur_time - last_time);
-    int32_t dt_v = (int32_t)dt.count();
-    last_time = cur_time;
-    GUID frameSubtype = framefmt.MediaSubtype;
-    int frameWidth = framefmt.Width;
-    int frameHeight = framefmt.Height;
-
-    if (buff != NULL && len > 0 && \
-        frameSubtype != MEDIASUBTYPE_NONE && \
-        frameWidth != 0 && frameHeight != 0) {
-
-        if (showFrameExecute)
-            showFrame(frameCount, frameWidth, frameHeight, frameSubtype, buff, len);
-
-        if (saveFrameExecute)
-            saveFrame(frameCount, frameSubtype, buff, len);
+    if (cpBufferLen == 0 && cpBufferLenMax >= len) {
+        memcpy(cpBuffer, buff, len);
+        cpBufferLen = len;
     }
 
-    printf("frame[%d] w:%d h:%d size:%d fps:%0.02f\n",
-        frameCount, frameWidth, frameHeight, len, dt_v == 0 ? 0 : (1000.0f / dt_v));
-    //printf(" subtype:%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X\n\n",
-    //    frameSubtype.Data1, frameSubtype.Data2, frameSubtype.Data3,
-    //    frameSubtype.Data4[0],
-    //    frameSubtype.Data4[1],
-    //    frameSubtype.Data4[2],
-    //    frameSubtype.Data4[3],
-    //    frameSubtype.Data4[4],
-    //    frameSubtype.Data4[5],
-    //    frameSubtype.Data4[6],
-    //    frameSubtype.Data4[7]);
-
-    frameCount++;
     return 0;
 }
 
@@ -305,7 +277,7 @@ int main(int argc, char **argv)
     frameSubtype = framefmt.MediaSubtype;
     frameWidth = framefmt.Width;
     frameHeight = framefmt.Height;
-    frameRate = 10000000 / framefmt.AvgTimePerFrame;
+    frameRate = (int)(10000000 / framefmt.AvgTimePerFrame);
 
     printf(" w:%d h:%d fps:%d\n",
         frameWidth, frameHeight, frameRate);
@@ -320,6 +292,10 @@ int main(int argc, char **argv)
         frameSubtype.Data4[6],
         frameSubtype.Data4[7]);
 
+    cpBufferLenMax = frameWidth * frameHeight * 3;
+    cpBuffer = (BYTE *)malloc(cpBufferLenMax);
+    cpBufferLen = 0;
+
     printf("start stream\n");
     ret = CameraStartStream();
 
@@ -330,7 +306,37 @@ int main(int argc, char **argv)
 End:
 
     while (1) {
-        this_thread::sleep_for(chrono::seconds(1));
+        //this_thread::sleep_for(chrono::seconds(1));
+        if (cpBufferLen) {
+            static int32_t frameCount = 0;
+            GUID frameSubtype = framefmt.MediaSubtype;
+            int frameWidth = framefmt.Width;
+            int frameHeight = framefmt.Height;
+
+            if (cpBuffer != NULL && cpBufferLen > 0 && \
+                frameSubtype != MEDIASUBTYPE_NONE && \
+                frameWidth != 0 && frameHeight != 0) {
+
+                if (showFrameExecute)
+                    showFrame(frameCount, frameWidth, frameHeight, frameSubtype, cpBuffer, cpBufferLen);
+
+                if (saveFrameExecute)
+                    saveFrame(frameCount, frameSubtype, cpBuffer, cpBufferLen);
+            }
+
+            cpBufferLen = 0;
+
+            static auto last_time = system_clock::now();
+            auto cur_time = system_clock::now();
+            auto dt = duration_cast<milliseconds>(cur_time - last_time);
+            int32_t dt_v = (int32_t)dt.count();
+            last_time = cur_time;
+
+            printf("frame[%d] w:%d h:%d size:%d fps:%0.02f\n",
+                frameCount, frameWidth, frameHeight, cpBufferLen, dt_v == 0 ? 0 : (1000.0f / dt_v));
+
+            frameCount++;
+        }
 #if 0
         printf("stop stream\n");
         ret = CameraStopStream();
