@@ -64,7 +64,7 @@ void saveFrame(int32_t frameIndex, GUID subtyep, BYTE *pBuffer, long lBufferSize
     wprintf(L"saveFrame %s\n", buff);
 }
 
-void showFrame(int32_t frameIndex, int width, int height, GUID subtyep, BYTE *pBuffer, long lBufferSize)
+void showFrame(int width, int height, GUID subtyep, BYTE *pBuffer, long lBufferSize)
 {
     string winname = "showFrame";
 
@@ -321,7 +321,7 @@ End:
                 frameWidth != 0 && frameHeight != 0) {
 
                 if (showFrameExecute)
-                    showFrame(frameCount, frameWidth, frameHeight, frameSubtype, buff, len);
+                    showFrame(frameWidth, frameHeight, frameSubtype, buff, len);
 
                 if (saveFrameExecute)
                     saveFrame(frameCount, frameSubtype, buff, len);
