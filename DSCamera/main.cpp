@@ -37,7 +37,7 @@ static Format framefmt;
 static bool saveFrameExecute = false;
 static bool showFrameExecute = true;
 static cv::Mat cvFrameRGB(DEFAULT_FRAME_HEIGHT, DEFAULT_FRAME_WIDTH, CV_32F, cv::Scalar::all(0));
-static BYTE *cpBuffer;
+static BYTE *cpBuffer = NULL;
 static LONG cpBufferLen = 0;
 static LONG cpBufferLenMax = 0;
 
