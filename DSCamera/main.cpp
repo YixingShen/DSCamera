@@ -313,19 +313,18 @@ End:
         //this_thread::sleep_for(chrono::seconds(1));
         if (cpBufferLen) {
             static int32_t frameCount = 0;
-            GUID frameSubtype = framefmt.MediaSubtype;
-            int frameWidth = framefmt.Width;
-            int frameHeight = framefmt.Height;
+            LONG len = cpBufferLen;
+            BYTE *buff = cpBuffer;
 
-            if (cpBuffer != NULL && cpBufferLen > 0 && \
+            if (buff != NULL && len > 0 && \
                 frameSubtype != MEDIASUBTYPE_NONE && \
                 frameWidth != 0 && frameHeight != 0) {
 
                 if (showFrameExecute)
-                    showFrame(frameCount, frameWidth, frameHeight, frameSubtype, cpBuffer, cpBufferLen);
+                    showFrame(frameCount, frameWidth, frameHeight, frameSubtype, buff, len);
 
                 if (saveFrameExecute)
-                    saveFrame(frameCount, frameSubtype, cpBuffer, cpBufferLen);
+                    saveFrame(frameCount, frameSubtype, buff, len);
             }
 
             cpBufferLen = 0;
@@ -337,7 +336,7 @@ End:
             last_time = cur_time;
 
             printf("frame[%d] w:%d h:%d size:%d fps:%0.02f\n",
-                frameCount, frameWidth, frameHeight, cpBufferLen, dt_v == 0 ? 0 : (1000.0f / dt_v));
+                frameCount, frameWidth, frameHeight, len, dt_v == 0 ? 0 : (1000.0f / dt_v));
 
             frameCount++;
         }
