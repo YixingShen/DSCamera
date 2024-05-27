@@ -169,9 +169,6 @@ int main(int argc, char **argv)
         case 's':
             streamIndex = strtol(optarg, NULL, 10);
             break;
-        case 'i':
-            streamIndex = strtol(optarg, NULL, 10);
-            break;
         case 'f':
             frameRate = strtol(optarg, NULL, 10);
             break;
