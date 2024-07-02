@@ -163,13 +163,13 @@ static struct option long_options[] = {
 void usage_long_options() {
     printf("Usage: DSCamera\n");
     printf("Options:\n");
-    printf(" --device DEVICE          specify device index (default=0)\n");
-    printf(" --type {YUY2,NV12,MJPG}  request video type (default=YUY2)\n");
-    printf(" --stream STREAM          specify video stream index (default=0)\n");
-    printf(" --width WIDTH            request video width (default=320)\n");
-    printf(" --height HEIGHT          request video height (default=240)\n");
-    printf(" --framerate FRAMERATE    request video frame rate (default=30)\n");
-    printf(" --help                   help message\n");
+    printf(" --device DEVICE               specify device index (default=0)\n");
+    printf(" --type {YUY2,NV12,M420,MJPG}  request video type (default=YUY2)\n");
+    printf(" --stream STREAM               specify video stream index (default=0)\n");
+    printf(" --width WIDTH                 request video width (default=320)\n");
+    printf(" --height HEIGHT               request video height (default=240)\n");
+    printf(" --framerate FRAMERATE         request video frame rate (default=30)\n");
+    printf(" --help                        help message\n");
     printf("\n");
     printf("Example:\n");
     printf(" DSCamera --device=0 --type=YUY2 --framerate=30\n");
@@ -237,6 +237,10 @@ int main(int argc, char **argv)
     else if (!strcmp(videoType, "NV12"))
     {
         frameSubtype = MEDIASUBTYPE_NV12;
+    }
+    else if (!strcmp(videoType, "M420"))
+    {
+        frameSubtype = MEDIASUBTYPE_M420;
     }
 
     if (PathIsDirectory(SAVE_FRAME_DIR))
