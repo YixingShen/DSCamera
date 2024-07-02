@@ -84,6 +84,42 @@ void showFrame(int width, int height, GUID subtyep, BYTE *pBuffer, long lBufferS
             cv::cvtColor(src, cvFrameRGB, cv::COLOR_YUV2BGR_YUY2);
             winname = "YUY2";
         }
+        else if (subtyep == MEDIASUBTYPE_M420) { //M420
+            //M420 frame size 17x2
+            //start +  0 : Y・00  Y・01  Y・02  Y・03
+            //start +  4 : Y・10  Y・11  Y・12  Y・13
+            //start +  8 : Cb00  Cr00  Cb01  Cr01
+            //start + 16 : Y・20  Y・21  Y・22  Y・23
+            //start + 20 : Y・30  Y・31  Y・32  Y・33
+            //start + 24 : Cb10  Cr10  Cb11  Cr11
+
+            //NV12 frame size 17x2
+            //start + 0  : Y・00  Y・01  Y・02  Y・03
+            //start + 4  : Y・10  Y・11  Y・12  Y・13
+            //start + 8  : Y・20  Y・21  Y・22  Y・23
+            //start + 12 : Y・30  Y・31  Y・32  Y・33
+            //start + 16 : Cb00  Cr00  Cb01  Cr01
+            //start + 20 : Cb10  Cr10  Cb11  Cr11
+
+            BYTE * pBuffer_NV12 = (BYTE *)malloc(lBufferSize);
+            int nv12_y = 0;
+            int nv12_uv = 0;
+            const int nv12_uv_offset = width * height;
+
+            //M420 to NV12
+            for (int y = 0; y < height; y += 3) {
+                memcpy((void*)pBuffer_NV12[nv12_y * width], (void*)pBuffer[(y + 0) * width], width);
+                nv12_y++;
+                memcpy((void*)pBuffer_NV12[nv12_y * width], (void*)pBuffer[(y + 1) * width], width);
+                nv12_y++;
+                memcpy((void*)pBuffer_NV12[nv12_uv_offset + nv12_uv * width], (void*)pBuffer[(y + 2) * width], width);
+                nv12_uv++;
+            }
+
+            cv::Mat src(height * 12 / 8, width, CV_8UC1, (void*)pBuffer_NV12);
+            cv::cvtColor(src, cvFrameRGB, cv::COLOR_YUV2BGR_NV12);
+            winname = "M420";
+        }
 
         //cv::resize(cvFrameRGB, cvFrameRGB, Size(width * 2, height * 2), 0, 0, INTER_NEAREST);
     }
