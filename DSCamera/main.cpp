@@ -36,12 +36,12 @@ using namespace chrono;
 using namespace cv;
 
 static Format framefmt;
-static bool saveFrameExecute = false;
-static bool showFrameExecute = true;
+static volatile bool saveFrameExecute = false;
+static volatile bool showFrameExecute = true;
 static cv::Mat cvFrameRGB(DEFAULT_FRAME_HEIGHT, DEFAULT_FRAME_WIDTH, CV_32F, cv::Scalar::all(0));
 static BYTE *cpBuffer = NULL;
-static LONG cpBufferLen = 0;
-static LONG cpBufferLenMax = 0;
+static volatile LONG cpBufferLen = 0;
+static volatile LONG cpBufferLenMax = 0;
 
 void saveFrame(int32_t frameIndex, GUID subtyep, BYTE *pBuffer, long lBufferSize)
 {
@@ -115,12 +115,12 @@ static int videoCallback(double time, BYTE *buff, LONG len)
 
 #if defined(SUPPORT_STILL_IMAGE)
 static Format stillimagefmt;
-static bool saveStillImageExecute = false;
-static bool showStillImageExecute = true;
+static volatile bool saveStillImageExecute = false;
+static volatile bool showStillImageExecute = true;
 static int enableStillImage = DEFAULT_STILLIMAGE_EN;
 static BYTE *cpBufferStill = NULL;
-static LONG cpBufferLenStill = 0;
-static LONG cpBufferLenMaxStill = 0;
+static volatile LONG cpBufferLenStill = 0;
+static volatile LONG cpBufferLenMaxStill = 0;
 static cv::Mat cvStillImageRGB(DEFAULT_FRAME_HEIGHT, DEFAULT_FRAME_WIDTH, CV_32F, cv::Scalar::all(0));
 
 void saveStillImage(int32_t frameIndex, GUID subtyep, BYTE *pBuffer, long lBufferSize)
