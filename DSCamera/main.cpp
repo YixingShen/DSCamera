@@ -281,7 +281,8 @@ int main(int argc, char **argv)
         default:
             usage_long_options();
             /* NOTREACHED */
-            break;
+            return 0;
+            //break;
         }
     }
 
