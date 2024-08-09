@@ -11,6 +11,7 @@ Options:
  --width WIDTH                 request video width (default=320)
  --height HEIGHT               request video height (default=240)
  --framerate FRAMERATE         request video frame rate (default=30)
+ --stillimage ENABLE           enable sitll image (default=0)
  --help                        help message
 
 Example:

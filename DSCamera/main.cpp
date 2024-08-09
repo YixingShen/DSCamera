@@ -26,8 +26,10 @@
 #define DEFAULT_FRAME_WIDTH   320
 #define DEFAULT_FRAME_HEIGHT  240
 #define DEFAULT_FRAME_SUBTYPE MEDIASUBTYPE_YUY2
+#define DEFAULT_STILLIMAGE_EN 1
 
 #define SAVE_FRAME_DIR        L"./saveframe"
+#define STILLIMAGE_LOOP       100 // must be more than 1
 
 using namespace std;
 using namespace chrono;
@@ -66,12 +68,12 @@ void saveFrame(int32_t frameIndex, GUID subtyep, BYTE *pBuffer, long lBufferSize
 
 void showFrame(int width, int height, GUID subtyep, BYTE *pBuffer, long lBufferSize)
 {
-    string winname = "showFrame";
+    string winname = "Frame ";
 
     if (subtyep == MEDIASUBTYPE_MJPG) {
         cv::Mat rawData(1, lBufferSize, CV_8UC1, (void*)pBuffer);
         cvFrameRGB = imdecode(rawData, cv::IMREAD_COLOR);
-        winname = "MJPG";
+        winname += "MJPG";
     }
     else {
         if (subtyep == MEDIASUBTYPE_NV12) {
@@ -82,43 +84,7 @@ void showFrame(int width, int height, GUID subtyep, BYTE *pBuffer, long lBufferS
         else if (subtyep == MEDIASUBTYPE_YUY2) { //YUY2
             cv::Mat src(height, width, CV_8UC2, (void*)pBuffer);
             cv::cvtColor(src, cvFrameRGB, cv::COLOR_YUV2BGR_YUY2);
-            winname = "YUY2";
-        }
-        else if (subtyep == MEDIASUBTYPE_M420) { //M420
-            //M420 frame size 17x2
-            //start +  0 : Y・00  Y・01  Y・02  Y・03
-            //start +  4 : Y・10  Y・11  Y・12  Y・13
-            //start +  8 : Cb00  Cr00  Cb01  Cr01
-            //start + 16 : Y・20  Y・21  Y・22  Y・23
-            //start + 20 : Y・30  Y・31  Y・32  Y・33
-            //start + 24 : Cb10  Cr10  Cb11  Cr11
-
-            //NV12 frame size 17x2
-            //start + 0  : Y・00  Y・01  Y・02  Y・03
-            //start + 4  : Y・10  Y・11  Y・12  Y・13
-            //start + 8  : Y・20  Y・21  Y・22  Y・23
-            //start + 12 : Y・30  Y・31  Y・32  Y・33
-            //start + 16 : Cb00  Cr00  Cb01  Cr01
-            //start + 20 : Cb10  Cr10  Cb11  Cr11
-
-            BYTE * pBuffer_NV12 = (BYTE *)malloc(lBufferSize);
-            int nv12_y = 0;
-            int nv12_uv = 0;
-            const int nv12_uv_offset = width * height;
-
-            //M420 to NV12
-            for (int y = 0; y < height; y += 3) {
-                memcpy((void*)pBuffer_NV12[nv12_y * width], (void*)pBuffer[(y + 0) * width], width);
-                nv12_y++;
-                memcpy((void*)pBuffer_NV12[nv12_y * width], (void*)pBuffer[(y + 1) * width], width);
-                nv12_y++;
-                memcpy((void*)pBuffer_NV12[nv12_uv_offset + nv12_uv * width], (void*)pBuffer[(y + 2) * width], width);
-                nv12_uv++;
-            }
-
-            cv::Mat src(height * 12 / 8, width, CV_8UC1, (void*)pBuffer_NV12);
-            cv::cvtColor(src, cvFrameRGB, cv::COLOR_YUV2BGR_NV12);
-            winname = "M420";
+            winname += "YUY2";
         }
 
         //cv::resize(cvFrameRGB, cvFrameRGB, Size(width * 2, height * 2), 0, 0, INTER_NEAREST);
@@ -147,6 +113,86 @@ static int videoCallback(double time, BYTE *buff, LONG len)
     return 0;
 }
 
+#if defined(SUPPORT_STILL_IMAGE)
+static Format stillimagefmt;
+static bool saveStillImageExecute = false;
+static bool showStillImageExecute = true;
+static int enableStillImage = DEFAULT_STILLIMAGE_EN;
+static BYTE *cpBufferStill = NULL;
+static LONG cpBufferLenStill = 0;
+static LONG cpBufferLenMaxStill = 0;
+static cv::Mat cvStillImageRGB(DEFAULT_FRAME_HEIGHT, DEFAULT_FRAME_WIDTH, CV_32F, cv::Scalar::all(0));
+
+void saveStillImage(int32_t frameIndex, GUID subtyep, BYTE *pBuffer, long lBufferSize)
+{
+    TCHAR buff[50];
+
+    if (subtyep == MEDIASUBTYPE_MJPG)
+        swprintf(buff, _countof(buff), SAVE_FRAME_DIR"/stillimage_%d.jpg", frameIndex);
+    else
+        swprintf(buff, _countof(buff), SAVE_FRAME_DIR"/stillimage_%d.bin", frameIndex);
+
+    DWORD dwWritten = 0;
+    HANDLE hFile = CreateFile(buff, GENERIC_WRITE, FILE_SHARE_WRITE, NULL, CREATE_ALWAYS, 0, NULL);
+
+    if (hFile == INVALID_HANDLE_VALUE) {
+        printf("Invalid file handle: %d\n", GetLastError());
+        return;
+    }
+
+    WriteFile(hFile, pBuffer, lBufferSize, &dwWritten, NULL);
+    CloseHandle(hFile);
+
+    wprintf(L"saveStillImage %s\n", buff);
+}
+
+void showStillImage(int width, int height, GUID subtyep, BYTE *pBuffer, long lBufferSize)
+{
+    string winname = "Still ";
+
+    if (subtyep == MEDIASUBTYPE_MJPG) {
+        cv::Mat rawData(1, lBufferSize, CV_8UC1, (void*)pBuffer);
+        cvStillImageRGB = imdecode(rawData, cv::IMREAD_COLOR);
+        winname += "MJPG";
+    }
+    else {
+        if (subtyep == MEDIASUBTYPE_NV12) {
+            cv::Mat src(height * 12 / 8, width, CV_8UC1, (void*)pBuffer);
+            cv::cvtColor(src, cvStillImageRGB, cv::COLOR_YUV2BGR_NV12);
+            winname += "NV12";
+        }
+        else if (subtyep == MEDIASUBTYPE_YUY2) { //YUY2
+            cv::Mat src(height, width, CV_8UC2, (void*)pBuffer);
+            cv::cvtColor(src, cvStillImageRGB, cv::COLOR_YUV2BGR_YUY2);
+            winname += "YUY2";
+        }
+
+        //cv::resize(cvStillImageRGB, cvStillImageRGB, Size(width * 2, height * 2), 0, 0, INTER_NEAREST);
+    }
+
+    //End:
+
+    cv::namedWindow(winname, WINDOW_AUTOSIZE);
+    cv::imshow(winname, cvStillImageRGB);
+
+    int cvkey = cv::waitKey(1) & 0xFF;
+
+    if (27 == cvkey) { //27 for ASCII ESC
+        cv::destroyAllWindows();
+        showStillImageExecute = false;
+    }
+}
+
+static int stillImageCallback(double time, BYTE *buff, LONG len){
+    if (cpBufferLenStill == 0 && cpBufferLenMaxStill >= len) {
+        memcpy(cpBufferStill, buff, len);
+        cpBufferLenStill = len;
+    }
+
+    return 0;
+}
+#endif
+
 static const char *shortopts = "t:d:s:w:h:f";
 
 static struct option long_options[] = {
@@ -157,6 +203,9 @@ static struct option long_options[] = {
     { "width",  required_argument, NULL, 'w' },
     { "height", required_argument, NULL, 'h' },
     { "framerate",    required_argument, NULL, 'f' },
+#if defined(SUPPORT_STILL_IMAGE)
+    { "stillimage", required_argument, NULL, 'S' },
+#endif
     { 0 ,0, 0, 0 }
 };
 
@@ -169,6 +218,9 @@ void usage_long_options() {
     printf(" --width WIDTH                 request video width (default=320)\n");
     printf(" --height HEIGHT               request video height (default=240)\n");
     printf(" --framerate FRAMERATE         request video frame rate (default=30)\n");
+#if defined(SUPPORT_STILL_IMAGE)
+    printf(" --stillimage ENABLE           enable sitll image (default=0)\n");
+#endif
     printf(" --help                        help message\n");
     printf("\n");
     printf("Example:\n");
@@ -183,6 +235,12 @@ int main(int argc, char **argv)
     int frameWidth = DEFAULT_FRAME_WIDTH;
     int frameHeight = DEFAULT_FRAME_HEIGHT;
     GUID frameSubtype = DEFAULT_FRAME_SUBTYPE;
+#if defined(SUPPORT_STILL_IMAGE)
+    int stillimageWidth = DEFAULT_FRAME_WIDTH;
+    int stillimageHeight = DEFAULT_FRAME_HEIGHT;
+    GUID stillimageSubtype = DEFAULT_FRAME_SUBTYPE;
+    int stillimageLoop = (STILLIMAGE_LOOP - 1);
+#endif
     char* videoType = "";
     DeviceList dlist;
     int opt;
@@ -214,6 +272,11 @@ int main(int argc, char **argv)
         case 'h':
             frameHeight = strtol(optarg, NULL, 10);
             break;
+#if defined(SUPPORT_STILL_IMAGE)
+        case 'S':
+            enableStillImage = strtol(optarg, NULL, 10);
+            break;
+#endif
         case '?':
         default:
             usage_long_options();
@@ -237,10 +300,6 @@ int main(int argc, char **argv)
     else if (!strcmp(videoType, "NV12"))
     {
         frameSubtype = MEDIASUBTYPE_NV12;
-    }
-    else if (!strcmp(videoType, "M420"))
-    {
-        frameSubtype = MEDIASUBTYPE_M420;
     }
 
     if (PathIsDirectory(SAVE_FRAME_DIR))
@@ -286,7 +345,7 @@ int main(int argc, char **argv)
     CameraSetVideoCallback(videoCallback);
 
     printf("open stream[%d]\n", streamIndex);
-    ret = CameraOpenStream(streamIndex);
+    ret = CameraOpen(streamIndex);
 
     if (!ret) {
         printf("failed to OpenStream(%d) !\n", streamIndex);
@@ -336,7 +395,57 @@ int main(int argc, char **argv)
     cpBufferLenMax = frameWidth * frameHeight * 3;
     cpBuffer = (BYTE *)malloc(cpBufferLenMax);
     cpBufferLen = 0;
+#if defined(SUPPORT_STILL_IMAGE)
+    if (enableStillImage == 1) {
+        printf("enable still image\n");
+        ret = CameraEnableStillImage();
 
+        if (!ret) {
+            printf("failed to EnableStillImage !\n");
+            goto End;
+        }
+
+        printf("set sillimage callback\n");
+        CameraSetStillImageCallback(stillImageCallback);
+
+        ret = CameraSetStillImageFormat(stillimageWidth, stillimageHeight, stillimageSubtype);
+        
+        if (!ret) {
+            printf("failed to SetStillImageFormat !\n");
+            goto End;
+        }
+
+        printf("get current stillimage format\n");
+        ZeroMemory(&stillimagefmt, sizeof(stillimagefmt));
+        ret = CameraGetStillImageFormat(&stillimagefmt);
+
+        if (!ret) {
+            printf("Failed to GetStillImageFormat !\n");
+            goto End;
+        }
+
+        stillimageSubtype = stillimagefmt.MediaSubtype;
+        stillimageWidth = stillimagefmt.Width;
+        stillimageHeight = stillimagefmt.Height;
+
+        printf(" stillimage w:%d h:%d\n",
+            stillimageWidth, stillimageHeight);
+        printf(" stillimage subtype:%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X\n",
+            stillimageSubtype.Data1, stillimageSubtype.Data2, stillimageSubtype.Data3,
+            stillimageSubtype.Data4[0],
+            stillimageSubtype.Data4[1],
+            stillimageSubtype.Data4[2],
+            stillimageSubtype.Data4[3],
+            stillimageSubtype.Data4[4],
+            stillimageSubtype.Data4[5],
+            stillimageSubtype.Data4[6],
+            stillimageSubtype.Data4[7]);
+
+        cpBufferLenMaxStill = stillimageWidth * stillimageHeight * 3;
+        cpBufferStill = (BYTE *)malloc(cpBufferLenMaxStill);
+        cpBufferLenStill = 0;
+    }
+#endif
     printf("start stream\n");
     ret = CameraStartStream();
 
@@ -348,8 +457,9 @@ End:
 
     while (1) {
         //this_thread::sleep_for(chrono::seconds(1));
+        static int32_t frameCount = 0;
+
         if (cpBufferLen) {
-            static int32_t frameCount = 0;
             LONG len = cpBufferLen;
             BYTE *buff = cpBuffer;
 
@@ -377,6 +487,38 @@ End:
 
             frameCount++;
         }
+#if defined(SUPPORT_STILL_IMAGE)
+        if (enableStillImage && cpBufferLenStill == 0 &&
+            (frameCount % STILLIMAGE_LOOP) == stillimageLoop)
+        {
+            printf("frameCount[%d] trigger still image\n", frameCount);
+            CameraTriggerStillImage();
+            stillimageLoop--;
+            if (stillimageLoop > (STILLIMAGE_LOOP - 1)) stillimageLoop = 1;
+            if (stillimageLoop < 1) stillimageLoop = (STILLIMAGE_LOOP - 1);
+        }
+
+        if (cpBufferLenStill) {
+            static int32_t stillimageCount = 0;
+            LONG len = cpBufferLenStill;
+            BYTE *buff = cpBufferStill;
+
+            if (buff != NULL && len > 0 && \
+                stillimageSubtype != MEDIASUBTYPE_NONE && \
+                stillimageWidth != 0 && stillimageHeight != 0) {
+
+                if (showStillImageExecute)
+                    showStillImage(stillimageWidth, stillimageHeight, stillimageSubtype, buff, len);
+
+                if (saveStillImageExecute)
+                    saveStillImage(stillimageCount, stillimageSubtype, buff, len);
+            }
+
+            printf("stillimage[%d] w:%d h:%d size:%d\n", stillimageCount, stillimageWidth, stillimageHeight, len);
+            cpBufferLenStill = 0;
+            stillimageCount++;
+        }
+#endif
 #if 0
         printf("stop stream\n");
         ret = CameraStopStream();

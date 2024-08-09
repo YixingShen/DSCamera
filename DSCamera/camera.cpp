@@ -5,6 +5,7 @@
 
 using namespace std;
 
+
 //define release maco
 #define ReleaseInterface(x) \
 if (NULL != x)              \
@@ -47,9 +48,16 @@ static ISampleGrabber *g_pGrabber;
 static IMediaEventEx *g_pME;
 static SampleGrabberCallback *g_pSampleGrabCallback;
 static bool g_InitOK;
+static bool g_StreamOngoing;
 static bool g_IsOpened;
 static FormatList g_FormatList;
 static DeviceList g_DeviceList;
+static IAMVideoControl *g_pVC;
+#if defined(SUPPORT_STILL_IMAGE)
+static ISampleGrabber *g_pGrabberStill;
+static SampleGrabberCallback *g_pSampleGrabCallbackStill;
+static bool g_IsEnabledStill;
+#endif
 
 //Converting a WChar string to a Ansi string
 std::string WChar2Ansi(LPCWSTR pwszSrc)
@@ -467,6 +475,32 @@ done:
     return hr;
 }
 
+#if defined(SUPPORT_STILL_IMAGE)
+static HRESULT GetStillImageFormat(AM_MEDIA_TYPE* mediatype)
+{
+    HRESULT hr;
+
+    AM_MEDIA_TYPE pmt;
+    hr = g_pGrabberStill->GetConnectedMediaType(&pmt);
+    CHECK_HR_GO_DONE(hr);
+
+    CopyMemory(mediatype, &pmt, sizeof(AM_MEDIA_TYPE));
+    FreeMediaType(pmt);
+done:
+    return hr;
+}
+
+static HRESULT SetStillImageFormat(AM_MEDIA_TYPE* mediatype)
+{
+    HRESULT hr;
+
+    hr = g_pGrabberStill->SetMediaType(mediatype);
+    CHECK_HR_GO_DONE(hr);
+done:
+    return hr;
+}
+#endif
+
 static HRESULT EnumDevice(void)
 {
     HRESULT hr;
@@ -546,10 +580,15 @@ void CameraCloseInterface(void)
     ReleaseInterface(g_pSrcFilter);
     ReleaseInterface(g_pMC);
     ReleaseInterface(g_pME);
+    ReleaseInterface(g_pVC);
     ReleaseInterface(g_pGraph);
     ReleaseInterface(g_pCapture);
     ReleaseInterface(g_pGrabber);
     ReleaseInterface(g_pSampleGrabCallback);
+#if defined(SUPPORT_STILL_IMAGE)
+    ReleaseInterface(g_pGrabberStill);
+    ReleaseInterface(g_pSampleGrabCallbackStill);
+#endif
 
     CoUninitialize();
 }
@@ -557,7 +596,13 @@ void CameraCloseInterface(void)
 bool CameraCreateInterface(void)
 {
     g_pSampleGrabCallback = new SampleGrabberCallback();
+#if defined(SUPPORT_STILL_IMAGE)
+    g_pSampleGrabCallbackStill = new SampleGrabberCallback();
+    g_IsEnabledStill = false;
+    g_pGrabberStill = NULL;
+#endif
     g_InitOK = false;
+    g_StreamOngoing = false;
     g_IsOpened = false;
     g_pSrcFilter = NULL;
     g_pCapture = NULL;
@@ -565,6 +610,7 @@ bool CameraCreateInterface(void)
     g_pMC = NULL;
     g_pME = NULL;
     g_pGrabber = NULL;
+    g_pVC = NULL;
     g_FormatList = { 0 };
     g_DeviceList = { 0 };
 
@@ -593,6 +639,14 @@ void CameraSetVideoCallback(VideoCallbackFunc callback)
     if (g_pSampleGrabCallback)
         g_pSampleGrabCallback->videcallback = callback;
 }
+
+#if defined(SUPPORT_STILL_IMAGE)
+void CameraSetStillImageCallback(VideoCallbackFunc callback)
+{
+    if (g_pSampleGrabCallbackStill)
+        g_pSampleGrabCallbackStill->videcallback = callback;
+}
+#endif
 
 void CameraGetFormatList(FormatList *list)
 {
@@ -649,7 +703,7 @@ bool CameraStartStream(void)
     if (g_InitOK == false)
         return false;
 
-    if (g_IsOpened) {
+    if (g_StreamOngoing) {
         if (g_pMC)
             g_pMC->Run();
 
@@ -669,21 +723,170 @@ bool CameraStartStream(void)
         CHECK_HR_RET_FALSE(hr);
     }
 
-    g_IsOpened = TRUE;
+    g_StreamOngoing = TRUE;
     hr = g_pMC->Run();
     CHECK_HR_RET_FALSE(hr);
-
     return true;
 }
 
-bool CameraOpenStream(int srcPinOut)
+
+#if defined(SUPPORT_STILL_IMAGE)
+bool CameraEnableStillImage(void)
 {
     HRESULT hr;
 
     if (g_InitOK == false)
         return false;
 
-    if (g_IsOpened) {
+    if (g_IsOpened == false)
+        return false;
+    
+    if (g_IsEnabledStill)
+        return true;
+
+    //hr = g_pCapture->FindPin(
+    //    g_pSrcFilter,                  // Filter.
+    //    PINDIR_OUTPUT,         // Look for an output pin.
+    //    &PIN_CATEGORY_STILL,   // Pin category.
+    //    NULL,                  // Media type (don't care).
+    //    FALSE,                 // Pin must be unconnected.
+    //    0,                     // Get the 0'th pin.
+    //    &pStillPinOut                  // Receives a pointer to thepin.
+    //);
+
+    IBaseFilter *pGrabberF_Still;
+    IBaseFilter *pNullF_Still;
+
+    hr = g_pSrcFilter->QueryInterface(IID_IAMVideoControl, (LPVOID*)&g_pVC);
+    CHECK_HR_RET_FALSE(hr);
+
+    hr = CoCreateInstance(CLSID_SampleGrabber, NULL, CLSCTX_INPROC_SERVER, IID_IBaseFilter, (LPVOID*)&pGrabberF_Still);
+    CHECK_HR_RET_FALSE(hr);
+
+    hr = g_pGraph->AddFilter(pGrabberF_Still, L"Sample GrabberStill");
+    CHECK_HR_RET_FALSE(hr);
+
+    hr = pGrabberF_Still->QueryInterface(IID_ISampleGrabber, (LPVOID*)&g_pGrabberStill);
+    CHECK_HR_RET_FALSE(hr);
+
+    hr = CoCreateInstance(CLSID_NullRenderer, NULL, CLSCTX_INPROC_SERVER, IID_IBaseFilter, (void**)(&pNullF_Still));
+    CHECK_HR_RET_FALSE(hr);
+
+    hr = g_pGraph->AddFilter(pNullF_Still, L"NullRendererStill");
+    CHECK_HR_RET_FALSE(hr);
+
+    IPin *pStillPinOut = NULL;
+    IPin *pSrcPinOut = NULL;
+    IPin *pGrabPinIn = NULL;
+    IPin *pGrabPinOut = NULL;
+    IPin *pRenderPinIn = NULL;
+#if 0
+    hr = g_pCapture->RenderStream(&PIN_CATEGORY_STILL, &MEDIATYPE_Video,
+        g_pSrcFilter, pGrabberF_Still, pNullF_Still);
+    CHECK_HR_RET_FALSE(hr);
+    SAFE_RELEASE(pNullF_Still);
+    SAFE_RELEASE(pGrabberF_Still);
+    return true;
+#else
+    hr = FindPinByName(g_pSrcFilter, PINDIR_OUTPUT, &pStillPinOut, "Still");
+
+    if (SUCCEEDED(hr))
+    {
+        hr = FindPinByName(pGrabberF_Still, PINDIR_INPUT, &pGrabPinIn, "Input");
+        CHECK_HR_GO_DONE(hr);
+
+        hr = FindPinByName(pGrabberF_Still, PINDIR_OUTPUT, &pGrabPinOut, "Output");
+        CHECK_HR_GO_DONE(hr);
+
+        hr = FindPinByName(pNullF_Still, PINDIR_INPUT, &pRenderPinIn, "In");
+        CHECK_HR_GO_DONE(hr);
+
+        hr = g_pGraph->Connect(pStillPinOut, pGrabPinIn);
+        CHECK_HR_GO_DONE(hr);
+
+        hr = g_pGraph->Connect(pGrabPinOut, pRenderPinIn);
+        CHECK_HR_GO_DONE(hr);
+
+        SAFE_RELEASE(pNullF_Still);
+        SAFE_RELEASE(pGrabberF_Still);
+        SAFE_RELEASE(pStillPinOut);
+        SAFE_RELEASE(pSrcPinOut);
+        SAFE_RELEASE(pGrabPinIn);
+        SAFE_RELEASE(pGrabPinOut);
+        SAFE_RELEASE(pRenderPinIn);
+    }
+#endif
+    hr = g_pGrabberStill->SetOneShot(FALSE);
+    CHECK_HR_RET_FALSE(hr);
+
+    hr = g_pGrabberStill->SetBufferSamples(FALSE);
+    CHECK_HR_RET_FALSE(hr);
+
+    int nMode = 1; //0--SampleCB,1--BufferCB
+    hr = g_pGrabberStill->SetCallback(g_pSampleGrabCallbackStill, nMode);
+    CHECK_HR_RET_FALSE(hr);
+
+    g_IsEnabledStill = TRUE;
+    return true;
+done:
+    SAFE_RELEASE(pStillPinOut);
+    SAFE_RELEASE(pSrcPinOut);
+    SAFE_RELEASE(pGrabPinIn);
+    SAFE_RELEASE(pGrabPinOut);
+    SAFE_RELEASE(pRenderPinIn);
+    return false;
+}
+#endif
+
+#if defined(SUPPORT_STILL_IMAGE)
+bool CameraTriggerStillImage(void)
+{
+    HRESULT hr;
+
+    IPin *pStillPinOut = NULL;
+    hr = FindPinByName(g_pSrcFilter, PINDIR_OUTPUT, &pStillPinOut, "Still");
+    CHECK_HR_RET_FALSE(hr);
+
+    hr = g_pVC->SetMode(pStillPinOut, VideoControlFlag_Trigger);
+    CHECK_HR_GO_DONE(hr);
+
+    //Sleep(10);
+
+    //long Mode;
+    //hr = g_pVC->GetMode(pStillPinOut, &Mode);
+    //CHECK_HR_GO_DONE(hr);
+    //printf("Mode=0x%x\n", Mode);
+    //
+    //long Caps;
+    //hr = g_pVC->GetCaps(pStillPinOut, &Caps);
+    //CHECK_HR_GO_DONE(hr);
+    //printf("Caps=0x%x\n", Caps);
+    //
+    //IMediaEvent *pEvent;
+    //hr = g_pGraph->QueryInterface(IID_IMediaEvent, (void **)&pEvent);
+    //CHECK_HR_RET_FALSE(hr);
+    //// Wait for completion.
+    //long evCode;
+    //pEvent->WaitForCompletion(1, &evCode);
+    //printf("evCode=0x%x\n", evCode);
+
+    SAFE_RELEASE(pStillPinOut);
+    return true;
+done:
+    SAFE_RELEASE(g_pVC);
+
+    return false;
+}
+#endif
+
+bool CameraOpen(int srcPinOut)
+{
+    HRESULT hr;
+
+    if (g_InitOK == false)
+        return false;
+
+    if (g_StreamOngoing) {
         if (g_pMC)
             g_pMC->Run();
 
@@ -722,33 +925,47 @@ bool CameraOpenStream(int srcPinOut)
     hr = g_pCapture->RenderStream(&PIN_CATEGORY_CAPTURE, &MEDIATYPE_Video,
         g_pSrcFilter, pGrabberF, pNullF);
     CHECK_HR_RET_FALSE(hr);
+    SAFE_RELEASE(pNullF);
+    SAFE_RELEASE(pGrabberF);
+    return true;
 #else
     IPin *pSrcPinOut = NULL;
     IPin *pGrabPinIn = NULL;
     IPin *pGrabPinOut = NULL;
     IPin *pRenderPinIn = NULL;
-
     hr = FindPinByIndex(g_pSrcFilter, PINDIR_OUTPUT, srcPinOut, &pSrcPinOut);
-    CHECK_HR_RET_FALSE(hr);
+    CHECK_HR_GO_DONE(hr);
 
     hr = FindPinByName(pGrabberF, PINDIR_INPUT,  &pGrabPinIn,  "Input");
-    CHECK_HR_RET_FALSE(hr);
+    CHECK_HR_GO_DONE(hr);
 
     hr = FindPinByName(pGrabberF, PINDIR_OUTPUT, &pGrabPinOut, "Output");
-    CHECK_HR_RET_FALSE(hr);
+    CHECK_HR_GO_DONE(hr);
 
     hr = FindPinByName(pNullF, PINDIR_INPUT, &pRenderPinIn, "In");
-    CHECK_HR_RET_FALSE(hr);
+    CHECK_HR_GO_DONE(hr);
 
     hr = g_pGraph->Connect(pSrcPinOut, pGrabPinIn);
-    CHECK_HR_RET_FALSE(hr);
+    CHECK_HR_GO_DONE(hr);
 
     hr = g_pGraph->Connect(pGrabPinOut, pRenderPinIn);
-    CHECK_HR_RET_FALSE(hr);
-#endif
+    CHECK_HR_GO_DONE(hr);
 
-    pNullF->Release();
-    pGrabberF->Release();
+    SAFE_RELEASE(pNullF);
+    SAFE_RELEASE(pGrabberF);
+    SAFE_RELEASE(pSrcPinOut);
+    SAFE_RELEASE(pGrabPinIn);
+    SAFE_RELEASE(pGrabPinOut);
+    SAFE_RELEASE(pRenderPinIn);
+    g_IsOpened = true;
+    return true;
+done:
+    SAFE_RELEASE(pSrcPinOut);
+    SAFE_RELEASE(pGrabPinIn);
+    SAFE_RELEASE(pGrabPinOut);
+    SAFE_RELEASE(pRenderPinIn);
+    return false;
+#endif
 }
 
 bool CameraSetDevice(int deviceIndex)
@@ -925,3 +1142,45 @@ bool CameraSetGrabFrameRate(int frameRate)
 
     return true;
 }
+
+
+#if defined(SUPPORT_STILL_IMAGE)
+bool CameraGetStillImageFormat(Format* format)
+{
+    if (g_InitOK == false)
+        return false;
+
+    AM_MEDIA_TYPE mediatype;
+    HRESULT hr = GetStillImageFormat(&mediatype);
+    CHECK_HR_RET_FALSE(hr);
+
+    VIDEOINFOHEADER *pVih = (VIDEOINFOHEADER*)mediatype.pbFormat;
+    format->Width = pVih->bmiHeader.biWidth;
+    format->Height = pVih->bmiHeader.biHeight;
+    format->MediaSubtype = mediatype.subtype;
+    format->AvgTimePerFrame = pVih->AvgTimePerFrame;
+    return true;
+}
+
+bool CameraSetStillImageFormat(int Width, int Height, GUID MediaSubtype)
+{
+    if (g_InitOK == false)
+        return false;
+
+    AM_MEDIA_TYPE mediatype;
+    HRESULT hr = GetStillImageFormat(&mediatype);
+    CHECK_HR_RET_FALSE(hr);
+
+    VIDEOINFOHEADER *pVih = (VIDEOINFOHEADER*)mediatype.pbFormat;
+
+    pVih->bmiHeader.biWidth = Width;
+    pVih->bmiHeader.biHeight = Height;
+    mediatype.subtype = MediaSubtype;
+    // pVih->AvgTimePerFrame = (LONGLONG)(10000000 / frameRate);
+
+    hr = SetStillImageFormat(&mediatype);
+    CHECK_HR_RET_FALSE(hr);
+
+    return true;
+}
+#endif

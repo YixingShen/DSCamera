@@ -18,11 +18,9 @@
 
 DEFINE_GUID(MEDIASUBTYPE_NONE, 0x00000000, 0x0000, 0x0000, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00);
 
-// 3032344D-0000-0010-8000-00AA00389B71 'M420' == MEDIASUBTYPE_M420
-DEFINE_GUID(MEDIASUBTYPE_M420, 0x3032344D, 0x0000, 0x0010, 0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71);
-
 #define MaxFormatNum 32
 #define MaxDeviceNum 16
+#define SUPPORT_STILL_IMAGE
 
 typedef struct FormatStruct
 {
@@ -66,7 +64,9 @@ bool CameraSetDevice(int deviceIndex);
 
 void CameraSetVideoCallback(VideoCallbackFunc callback);
 
-bool CameraOpenStream(int srcPinOut);
+bool CameraOpen(int srcPinOut);
+
+bool CameraEnableStillImage(void);
 
 bool CameraStopStream(void);
 
@@ -81,5 +81,13 @@ bool CameraGetGrabFormat(Format* format);
 bool CameraSetGrabFormat(int Width, int Height, GUID MediaSubtype);
 
 bool CameraSetGrabFrameRate(int frameRate);
+
+void CameraSetStillImageCallback(VideoCallbackFunc callback);
+
+bool CameraTriggerStillImage(void);
+
+bool CameraGetStillImageFormat(Format* format);
+
+bool CameraSetStillImageFormat(int Width, int Height, GUID MediaSubtype);
 
 #endif
