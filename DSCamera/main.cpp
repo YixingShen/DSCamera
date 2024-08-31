@@ -26,7 +26,7 @@
 #define DEFAULT_FRAME_WIDTH   320
 #define DEFAULT_FRAME_HEIGHT  240
 #define DEFAULT_FRAME_SUBTYPE MEDIASUBTYPE_YUY2
-#define DEFAULT_STILLIMAGE_EN 1
+#define DEFAULT_STILLIMAGE_EN 0
 
 #define SAVE_FRAME_DIR        L"./saveframe"
 #define STILLIMAGE_LOOP       100 // must be more than 1
@@ -289,15 +289,16 @@ void usage_long_options() {
     printf("Usage: DSCamera\n");
     printf("Options:\n");
     printf(" --device DEVICE                  specify device index (default=0)\n");
-    printf(" --type {YUY2,NV12,M420,MJPG,Y8}  request video type (default=YUY2)\n");
+    printf(" --type TYPE                      request video type (default=YUY2)\n");
+    printf("  TYPE: YUY2,NV12,M420,MJPG,Y8\n");
     printf(" --stream STREAM                  specify video stream index (default=0)\n");
     printf(" --width WIDTH                    request video width (default=320)\n");
     printf(" --height HEIGHT                  request video height (default=240)\n");
     printf(" --framerate FRAMERATE            request video frame rate (default=30)\n");
 #if defined(SUPPORT_STILL_IMAGE)
-    printf(" --stillimage ENABLE           enable sitll image (default=0)\n");
+    printf(" --stillimage ENABLE              enable sitll image (default=0)\n");
 #endif
-    printf(" --help                        help message\n");
+    printf(" --help                           help message\n");
     printf("\n");
     printf("Example:\n");
     printf(" DSCamera --device=0 --type=YUY2 --framerate=30\n");
