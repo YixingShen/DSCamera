@@ -38,11 +38,9 @@ using namespace cv;
 static Format framefmt;
 static volatile bool saveFrameExecute = false;
 static volatile bool showFrameExecute = true;
-static cv::Mat cvFrameRGB(DEFAULT_FRAME_HEIGHT, DEFAULT_FRAME_WIDTH, CV_32F, cv::Scalar::all(0));
 static BYTE *cpBuffer = NULL;
 static volatile LONG cpBufferLen = 0;
 static volatile LONG cpBufferLenMax = 0;
-static BYTE *pBuffer_NV12 = NULL;
 
 void saveFrame(int32_t frameIndex, GUID subtyep, BYTE *pBuffer, long lBufferSize)
 {
@@ -70,6 +68,8 @@ void saveFrame(int32_t frameIndex, GUID subtyep, BYTE *pBuffer, long lBufferSize
 void showFrame(int width, int height, GUID subtyep, BYTE *pBuffer, long lBufferSize)
 {
     string winname = "Frame ";
+    static BYTE *pBuffer_NV12 = NULL;
+    static cv::Mat cvFrameRGB(DEFAULT_FRAME_HEIGHT, DEFAULT_FRAME_WIDTH, CV_32F, cv::Scalar::all(0));
 
     if (subtyep == MEDIASUBTYPE_MJPG) {
         cv::Mat rawData(1, lBufferSize, CV_8UC1, (void*)pBuffer);
@@ -136,11 +136,7 @@ void showFrame(int width, int height, GUID subtyep, BYTE *pBuffer, long lBufferS
             //cv::cvtColor(src, cvFrameRGB, cv::COLOR_YUV2BGR_NV12);
             winname += "M420";
         }
-
-        //cv::resize(cvFrameRGB, cvFrameRGB, Size(width * 2, height * 2), 0, 0, INTER_NEAREST);
     }
-
-//End:
 
     cv::namedWindow(winname, WINDOW_AUTOSIZE);
     cv::imshow(winname, cvFrameRGB);
@@ -171,8 +167,6 @@ static int enableStillImage = DEFAULT_STILLIMAGE_EN;
 static BYTE *cpBufferStill = NULL;
 static volatile LONG cpBufferLenStill = 0;
 static volatile LONG cpBufferLenMaxStill = 0;
-static cv::Mat cvStillImageRGB(DEFAULT_FRAME_HEIGHT, DEFAULT_FRAME_WIDTH, CV_32F, cv::Scalar::all(0));
-static BYTE *pBuffer_NV12_Still = NULL;
 
 void saveStillImage(int32_t frameIndex, GUID subtyep, BYTE *pBuffer, long lBufferSize)
 {
@@ -200,56 +194,54 @@ void saveStillImage(int32_t frameIndex, GUID subtyep, BYTE *pBuffer, long lBuffe
 void showStillImage(int width, int height, GUID subtyep, BYTE *pBuffer, long lBufferSize)
 {
     string winname = "Still ";
+    static BYTE *pBuffer_NV12 = NULL;
+    static cv::Mat cvFrameRGB(DEFAULT_FRAME_HEIGHT, DEFAULT_FRAME_WIDTH, CV_32F, cv::Scalar::all(0));
 
     if (subtyep == MEDIASUBTYPE_MJPG) {
         cv::Mat rawData(1, lBufferSize, CV_8UC1, (void*)pBuffer);
-        cvStillImageRGB = imdecode(rawData, cv::IMREAD_COLOR);
+        cvFrameRGB = imdecode(rawData, cv::IMREAD_COLOR);
         winname += "MJPG";
     }
     else {
         if (subtyep == MEDIASUBTYPE_NV12) {
             cv::Mat src(height * 12 / 8, width, CV_8UC1, (void*)pBuffer);
-            cv::cvtColor(src, cvStillImageRGB, cv::COLOR_YUV2BGR_NV12);
+            cv::cvtColor(src, cvFrameRGB, cv::COLOR_YUV2BGR_NV12);
             winname += "NV12";
         }
         else if (subtyep == MEDIASUBTYPE_Y8) {
             cv::Mat src(height, width, CV_8UC1, (void*)pBuffer);
-            cv::cvtColor(src, cvStillImageRGB, cv::COLOR_GRAY2BGR);
+            cv::cvtColor(src, cvFrameRGB, cv::COLOR_GRAY2BGR);
             winname += "Y8";
         }
         else if (subtyep == MEDIASUBTYPE_YUY2) { //YUY2
             cv::Mat src(height, width, CV_8UC2, (void*)pBuffer);
-            cv::cvtColor(src, cvStillImageRGB, cv::COLOR_YUV2BGR_YUY2);
+            cv::cvtColor(src, cvFrameRGB, cv::COLOR_YUV2BGR_YUY2);
             winname += "YUY2";
         }
         else if (subtyep == MEDIASUBTYPE_M420) { //M420
-            if (!pBuffer_NV12_Still)
-                pBuffer_NV12_Still = (BYTE *)malloc(lBufferSize);
+            if (!pBuffer_NV12)
+                pBuffer_NV12 = (BYTE *)malloc(lBufferSize);
 
             int nv12_uv_planar_pos = width * height;
 
             //M420 to NV12
             for (int y = 0; y < height; y += 2) {
-                memcpy((void*)pBuffer_NV12_Still[(y + 0) * width], (void*)pBuffer[(y + 0) * width], width);
-                memcpy((void*)pBuffer_NV12_Still[(y + 1) * width], (void*)pBuffer[(y + 1) * width], width);
-                memcpy((void*)pBuffer_NV12_Still[nv12_uv_planar_pos], (void*)pBuffer[(y + 2) * width], width);
+                memcpy((void*)pBuffer_NV12[(y + 0) * width], (void*)pBuffer[(y + 0) * width], width);
+                memcpy((void*)pBuffer_NV12[(y + 1) * width], (void*)pBuffer[(y + 1) * width], width);
+                memcpy((void*)pBuffer_NV12[nv12_uv_planar_pos], (void*)pBuffer[(y + 2) * width], width);
                 nv12_uv_planar_pos += width;
             }
 
-            cv::Mat src(height * 12 / 8, width, CV_8UC1, (void*)pBuffer_NV12_Still); //uncompress payload
-            cv::cvtColor(src, cvStillImageRGB, cv::COLOR_YUV2BGR_NV12);
+            cv::Mat src(height * 12 / 8, width, CV_8UC1, (void*)pBuffer_NV12); //uncompress payload
+            cv::cvtColor(src, cvFrameRGB, cv::COLOR_YUV2BGR_NV12);
             //cv::Mat src(height * 12 / 8, width, CV_8UC1, (void*)pBuffer);
-            //cv::cvtColor(src, cvStillImageRGB, cv::COLOR_YUV2BGR_NV12);
+            //cv::cvtColor(src, cvFrameRGB, cv::COLOR_YUV2BGR_NV12);
             winname += "M420";
         }
-
-        //cv::resize(cvStillImageRGB, cvStillImageRGB, Size(width * 2, height * 2), 0, 0, INTER_NEAREST);
     }
 
-    //End:
-
     cv::namedWindow(winname, WINDOW_AUTOSIZE);
-    cv::imshow(winname, cvStillImageRGB);
+    cv::imshow(winname, cvFrameRGB);
 
     int cvkey = cv::waitKey(1) & 0xFF;
 
@@ -382,11 +374,6 @@ int main(int argc, char **argv)
     else if (!strcmp(videoType, "M420"))
     {
         frameSubtype = MEDIASUBTYPE_M420;
-
-        if (!pBuffer_NV12)
-            free(pBuffer_NV12);
-
-        pBuffer_NV12 = NULL;
     }
     else if (!strcmp(videoType, "Y8"))
     {
