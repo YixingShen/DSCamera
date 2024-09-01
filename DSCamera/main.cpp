@@ -69,27 +69,31 @@ void showFrame(int width, int height, GUID subtyep, BYTE *pBuffer, long lBufferS
 {
     string winname = "Frame ";
     static BYTE *pBuffer_NV12 = NULL;
-    static cv::Mat cvFrameRGB(DEFAULT_FRAME_HEIGHT, DEFAULT_FRAME_WIDTH, CV_32F, cv::Scalar::all(0));
+    static BYTE *pBuffer_RAW10_LSB = NULL;
+    static cv::Mat dst(DEFAULT_FRAME_HEIGHT, DEFAULT_FRAME_WIDTH, CV_32F, cv::Scalar::all(0));
 
     if (subtyep == MEDIASUBTYPE_MJPG) {
-        cv::Mat rawData(1, lBufferSize, CV_8UC1, (void*)pBuffer);
-        cvFrameRGB = imdecode(rawData, cv::IMREAD_COLOR);
+        cv::Mat src(1, lBufferSize, CV_8UC1, (void*)pBuffer);
+        dst = imdecode(src, cv::IMREAD_COLOR);
         winname += "MJPG";
     }
     else {
         if (subtyep == MEDIASUBTYPE_NV12) {
             cv::Mat src(height * 12 / 8, width, CV_8UC1, (void*)pBuffer);
-            cv::cvtColor(src, cvFrameRGB, cv::COLOR_YUV2BGR_NV12);
+            dst = cv::Mat(height, width, CV_8UC3, cv::Scalar::all(0));
+            cv::cvtColor(src, dst, cv::COLOR_YUV2BGR_NV12);
             winname = "NV12";
         }
         else if (subtyep == MEDIASUBTYPE_Y8) { //frame based payload 
             cv::Mat src(height, width, CV_8UC1, (void*)pBuffer); //frame based payload 
-            cv::cvtColor(src, cvFrameRGB, cv::COLOR_GRAY2BGR);
+            dst = cv::Mat(height, width, CV_8UC3, cv::Scalar::all(0));
+            cv::cvtColor(src, dst, cv::COLOR_GRAY2BGR);
             winname += "Y8";
         }
         else if (subtyep == MEDIASUBTYPE_YUY2) { //YUY2
             cv::Mat src(height, width, CV_8UC2, (void*)pBuffer); //uncompress payload
-            cv::cvtColor(src, cvFrameRGB, cv::COLOR_YUV2BGR_YUY2);
+            dst = cv::Mat(height, width, CV_8UC3, cv::Scalar::all(0));
+            cv::cvtColor(src, dst, cv::COLOR_YUV2BGR_YUY2);
             winname += "YUY2";
         }
         else if (subtyep == MEDIASUBTYPE_M420) { //M420
@@ -131,15 +135,14 @@ void showFrame(int width, int height, GUID subtyep, BYTE *pBuffer, long lBufferS
             }
             
             cv::Mat src(height * 12 / 8, width, CV_8UC1, (void*)pBuffer_NV12); //uncompress payload
-            cv::cvtColor(src, cvFrameRGB, cv::COLOR_YUV2BGR_NV12);
-            //cv::Mat src(height * 12 / 8, width, CV_8UC1, (void*)pBuffer);
-            //cv::cvtColor(src, cvFrameRGB, cv::COLOR_YUV2BGR_NV12);
+            dst = cv::Mat(height, width, CV_8UC3, cv::Scalar::all(0));
+            cv::cvtColor(src, dst, cv::COLOR_YUV2BGR_NV12);
             winname += "M420";
         }
     }
 
     cv::namedWindow(winname, WINDOW_AUTOSIZE);
-    cv::imshow(winname, cvFrameRGB);
+    cv::imshow(winname, dst);
 
     int cvkey = cv::waitKey(1) & 0xFF;
 
@@ -195,53 +198,79 @@ void showStillImage(int width, int height, GUID subtyep, BYTE *pBuffer, long lBu
 {
     string winname = "Still ";
     static BYTE *pBuffer_NV12 = NULL;
-    static cv::Mat cvFrameRGB(DEFAULT_FRAME_HEIGHT, DEFAULT_FRAME_WIDTH, CV_32F, cv::Scalar::all(0));
+    static cv::Mat dst(DEFAULT_FRAME_HEIGHT, DEFAULT_FRAME_WIDTH, CV_32F, cv::Scalar::all(0));
 
     if (subtyep == MEDIASUBTYPE_MJPG) {
-        cv::Mat rawData(1, lBufferSize, CV_8UC1, (void*)pBuffer);
-        cvFrameRGB = imdecode(rawData, cv::IMREAD_COLOR);
+        cv::Mat src(1, lBufferSize, CV_8UC1, (void*)pBuffer);
+        dst = imdecode(src, cv::IMREAD_COLOR);
         winname += "MJPG";
     }
     else {
         if (subtyep == MEDIASUBTYPE_NV12) {
             cv::Mat src(height * 12 / 8, width, CV_8UC1, (void*)pBuffer);
-            cv::cvtColor(src, cvFrameRGB, cv::COLOR_YUV2BGR_NV12);
-            winname += "NV12";
+            dst = cv::Mat(height, width, CV_8UC3, cv::Scalar::all(0));
+            cv::cvtColor(src, dst, cv::COLOR_YUV2BGR_NV12);
+            winname = "NV12";
         }
-        else if (subtyep == MEDIASUBTYPE_Y8) {
-            cv::Mat src(height, width, CV_8UC1, (void*)pBuffer);
-            cv::cvtColor(src, cvFrameRGB, cv::COLOR_GRAY2BGR);
+        else if (subtyep == MEDIASUBTYPE_Y8) { //frame based payload 
+            cv::Mat src(height, width, CV_8UC1, (void*)pBuffer); //frame based payload 
+            dst = cv::Mat(height, width, CV_8UC3, cv::Scalar::all(0));
+            cv::cvtColor(src, dst, cv::COLOR_GRAY2BGR);
             winname += "Y8";
         }
         else if (subtyep == MEDIASUBTYPE_YUY2) { //YUY2
-            cv::Mat src(height, width, CV_8UC2, (void*)pBuffer);
-            cv::cvtColor(src, cvFrameRGB, cv::COLOR_YUV2BGR_YUY2);
+            cv::Mat src(height, width, CV_8UC2, (void*)pBuffer); //uncompress payload
+            dst = cv::Mat(height, width, CV_8UC3, cv::Scalar::all(0));
+            cv::cvtColor(src, dst, cv::COLOR_YUV2BGR_YUY2);
             winname += "YUY2";
         }
         else if (subtyep == MEDIASUBTYPE_M420) { //M420
+                                                 //M420 frame size 17x2
+                                                 //start +  0 : Y・00  Y・01  Y・02  Y・03
+                                                 //start +  4 : Y・10  Y・11  Y・12  Y・13
+                                                 //start +  8 : Cb00  Cr00  Cb01  Cr01
+                                                 //start + 16 : Y・20  Y・21  Y・22  Y・23
+                                                 //start + 20 : Y・30  Y・31  Y・32  Y・33
+                                                 //start + 24 : Cb10  Cr10  Cb11  Cr11
+
+                                                 //NV12 frame size 17x2
+                                                 //start + 0  : Y・00  Y・01  Y・02  Y・03
+                                                 //start + 4  : Y・10  Y・11  Y・12  Y・13
+                                                 //start + 8  : Y・20  Y・21  Y・22  Y・23
+                                                 //start + 12 : Y・30  Y・31  Y・32  Y・33
+                                                 //start + 16 : Cb00  Cr00  Cb01  Cr01
+                                                 //start + 20 : Cb10  Cr10  Cb11  Cr11
+
             if (!pBuffer_NV12)
                 pBuffer_NV12 = (BYTE *)malloc(lBufferSize);
 
-            int nv12_uv_planar_pos = width * height;
+            //int nv12_uv_planar_pos = width * height;
+            int nv12_y = 0;
+            int nv12_uv = width*height;
+            int m420_y = 0;
 
             //M420 to NV12
             for (int y = 0; y < height; y += 2) {
-                memcpy((void*)pBuffer_NV12[(y + 0) * width], (void*)pBuffer[(y + 0) * width], width);
-                memcpy((void*)pBuffer_NV12[(y + 1) * width], (void*)pBuffer[(y + 1) * width], width);
-                memcpy((void*)pBuffer_NV12[nv12_uv_planar_pos], (void*)pBuffer[(y + 2) * width], width);
-                nv12_uv_planar_pos += width;
+                memcpy((void*)&pBuffer_NV12[nv12_y], (void*)&pBuffer[m420_y], width);
+                m420_y += width;
+                nv12_y += width;
+                memcpy((void*)&pBuffer_NV12[nv12_y], (void*)&pBuffer[m420_y], width);
+                m420_y += width;
+                nv12_y += width;
+                memcpy((void*)&pBuffer_NV12[nv12_uv], (void*)&pBuffer[m420_y], width);
+                m420_y += width;
+                nv12_uv += width;
             }
 
             cv::Mat src(height * 12 / 8, width, CV_8UC1, (void*)pBuffer_NV12); //uncompress payload
-            cv::cvtColor(src, cvFrameRGB, cv::COLOR_YUV2BGR_NV12);
-            //cv::Mat src(height * 12 / 8, width, CV_8UC1, (void*)pBuffer);
-            //cv::cvtColor(src, cvFrameRGB, cv::COLOR_YUV2BGR_NV12);
+            dst = cv::Mat(height, width, CV_8UC3, cv::Scalar::all(0));
+            cv::cvtColor(src, dst, cv::COLOR_YUV2BGR_NV12);
             winname += "M420";
         }
     }
 
     cv::namedWindow(winname, WINDOW_AUTOSIZE);
-    cv::imshow(winname, cvFrameRGB);
+    cv::imshow(winname, dst);
 
     int cvkey = cv::waitKey(1) & 0xFF;
 
