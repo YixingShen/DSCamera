@@ -116,24 +116,17 @@ void showFrame(int width, int height, GUID subtyep, BYTE *pBuffer, long lBufferS
             if (!pBuffer_NV12)
                 pBuffer_NV12 = (BYTE *)malloc(lBufferSize);
 
-            //int nv12_uv_planar_pos = width * height;
-            int nv12_y = 0;
-            int nv12_uv = width*height;
+            int nv12_uv_planar_pos = width * height;
             int m420_y = 0;
-
             //M420 to NV12
             for (int y = 0; y < height; y += 2) {
-                memcpy((void*)&pBuffer_NV12[nv12_y], (void*)&pBuffer[m420_y], width);
-                m420_y += width;
-                nv12_y += width;
-                memcpy((void*)&pBuffer_NV12[nv12_y], (void*)&pBuffer[m420_y], width);
-                m420_y += width;
-                nv12_y += width;
-                memcpy((void*)&pBuffer_NV12[nv12_uv], (void*)&pBuffer[m420_y], width);
-                m420_y += width;
-                nv12_uv += width;
+                memcpy((void*)&pBuffer_NV12[(y + 0) * width],    (void*)&pBuffer[(m420_y + 0) * width], width);
+                memcpy((void*)&pBuffer_NV12[(y + 1) * width],    (void*)&pBuffer[(m420_y + 1) * width], width);
+                memcpy((void*)&pBuffer_NV12[nv12_uv_planar_pos], (void*)&pBuffer[(m420_y + 2) * width], width);
+                nv12_uv_planar_pos += width;
+                m420_y += 3;
             }
-            
+
             cv::Mat src(height * 12 / 8, width, CV_8UC1, (void*)pBuffer_NV12); //uncompress payload
             dst = cv::Mat(height, width, CV_8UC3, cv::Scalar::all(0));
             cv::cvtColor(src, dst, cv::COLOR_YUV2BGR_NV12);
@@ -244,22 +237,15 @@ void showStillImage(int width, int height, GUID subtyep, BYTE *pBuffer, long lBu
             if (!pBuffer_NV12)
                 pBuffer_NV12 = (BYTE *)malloc(lBufferSize);
 
-            //int nv12_uv_planar_pos = width * height;
-            int nv12_y = 0;
-            int nv12_uv = width*height;
+            int nv12_uv_planar_pos = width * height;
             int m420_y = 0;
-
             //M420 to NV12
             for (int y = 0; y < height; y += 2) {
-                memcpy((void*)&pBuffer_NV12[nv12_y], (void*)&pBuffer[m420_y], width);
-                m420_y += width;
-                nv12_y += width;
-                memcpy((void*)&pBuffer_NV12[nv12_y], (void*)&pBuffer[m420_y], width);
-                m420_y += width;
-                nv12_y += width;
-                memcpy((void*)&pBuffer_NV12[nv12_uv], (void*)&pBuffer[m420_y], width);
-                m420_y += width;
-                nv12_uv += width;
+                memcpy((void*)&pBuffer_NV12[(y + 0) * width],    (void*)&pBuffer[(m420_y + 0) * width], width);
+                memcpy((void*)&pBuffer_NV12[(y + 1) * width],    (void*)&pBuffer[(m420_y + 1) * width], width);
+                memcpy((void*)&pBuffer_NV12[nv12_uv_planar_pos], (void*)&pBuffer[(m420_y + 2) * width], width);
+                nv12_uv_planar_pos += width;
+                m420_y += 3;
             }
 
             cv::Mat src(height * 12 / 8, width, CV_8UC1, (void*)pBuffer_NV12); //uncompress payload
