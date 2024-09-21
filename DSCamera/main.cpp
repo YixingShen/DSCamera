@@ -70,12 +70,14 @@ void showFrame(int width, int height, GUID subtyep, BYTE *pBuffer, long lBufferS
     string winname = "Frame ";
     static BYTE *pBuffer_NV12 = NULL;
     static BYTE *pBuffer_RAW10_LSB = NULL;
-    static cv::Mat dst(DEFAULT_FRAME_HEIGHT, DEFAULT_FRAME_WIDTH, CV_32F, cv::Scalar::all(0));
+    cv::Mat dst;// (DEFAULT_FRAME_HEIGHT, DEFAULT_FRAME_WIDTH, CV_32F, cv::Scalar::all(0));
+    bool drawed = false;
 
     if (subtyep == MEDIASUBTYPE_MJPG) {
         cv::Mat src(1, lBufferSize, CV_8UC1, (void*)pBuffer);
         dst = imdecode(src, cv::IMREAD_COLOR);
         winname += "MJPG";
+        drawed = true;
     }
     else {
         if (subtyep == MEDIASUBTYPE_NV12) {
@@ -83,18 +85,21 @@ void showFrame(int width, int height, GUID subtyep, BYTE *pBuffer, long lBufferS
             dst = cv::Mat(height, width, CV_8UC3, cv::Scalar::all(0));
             cv::cvtColor(src, dst, cv::COLOR_YUV2BGR_NV12);
             winname = "NV12";
+            drawed = true;
         }
         else if (subtyep == MEDIASUBTYPE_Y8) { //frame based payload 
             cv::Mat src(height, width, CV_8UC1, (void*)pBuffer); //frame based payload 
             dst = cv::Mat(height, width, CV_8UC3, cv::Scalar::all(0));
             cv::cvtColor(src, dst, cv::COLOR_GRAY2BGR);
             winname += "Y8";
+            drawed = true;
         }
         else if (subtyep == MEDIASUBTYPE_YUY2) { //YUY2
             cv::Mat src(height, width, CV_8UC2, (void*)pBuffer); //uncompress payload
             dst = cv::Mat(height, width, CV_8UC3, cv::Scalar::all(0));
             cv::cvtColor(src, dst, cv::COLOR_YUV2BGR_YUY2);
             winname += "YUY2";
+            drawed = true;
         }
         else if (subtyep == MEDIASUBTYPE_M420) { //M420
             //M420 frame size 17x2
@@ -131,17 +136,22 @@ void showFrame(int width, int height, GUID subtyep, BYTE *pBuffer, long lBufferS
             dst = cv::Mat(height, width, CV_8UC3, cv::Scalar::all(0));
             cv::cvtColor(src, dst, cv::COLOR_YUV2BGR_NV12);
             winname += "M420";
+            drawed = true;
         }
     }
 
-    cv::namedWindow(winname, WINDOW_AUTOSIZE);
-    cv::imshow(winname, dst);
+    if (drawed) {
+        //cv::namedWindow(winname, WINDOW_AUTOSIZE);
+        //printf("image cols %d rows %d\n", dst.cols, dst.rows);
+        if (dst.rows != 0 && dst.cols != 0) {
+            cv::imshow(winname, dst);
+            int cvkey = cv::waitKey(1) & 0xFF;
 
-    int cvkey = cv::waitKey(1) & 0xFF;
-
-    if (27 == cvkey) { //27 for ASCII ESC
-        cv::destroyAllWindows();
-        showFrameExecute = false;
+            if (27 == cvkey) { //27 for ASCII ESC
+                cv::destroyAllWindows();
+                showFrameExecute = false;
+            }
+        }
     }
 }
 
@@ -191,12 +201,14 @@ void showStillImage(int width, int height, GUID subtyep, BYTE *pBuffer, long lBu
 {
     string winname = "Still ";
     static BYTE *pBuffer_NV12 = NULL;
-    static cv::Mat dst(DEFAULT_FRAME_HEIGHT, DEFAULT_FRAME_WIDTH, CV_32F, cv::Scalar::all(0));
+    cv::Mat dst;// (DEFAULT_FRAME_HEIGHT, DEFAULT_FRAME_WIDTH, CV_32F, cv::Scalar::all(0));
+    bool drawed = false;
 
     if (subtyep == MEDIASUBTYPE_MJPG) {
         cv::Mat src(1, lBufferSize, CV_8UC1, (void*)pBuffer);
         dst = imdecode(src, cv::IMREAD_COLOR);
         winname += "MJPG";
+        drawed = true;
     }
     else {
         if (subtyep == MEDIASUBTYPE_NV12) {
@@ -204,18 +216,21 @@ void showStillImage(int width, int height, GUID subtyep, BYTE *pBuffer, long lBu
             dst = cv::Mat(height, width, CV_8UC3, cv::Scalar::all(0));
             cv::cvtColor(src, dst, cv::COLOR_YUV2BGR_NV12);
             winname = "NV12";
+            drawed = true;
         }
         else if (subtyep == MEDIASUBTYPE_Y8) { //frame based payload 
             cv::Mat src(height, width, CV_8UC1, (void*)pBuffer); //frame based payload 
             dst = cv::Mat(height, width, CV_8UC3, cv::Scalar::all(0));
             cv::cvtColor(src, dst, cv::COLOR_GRAY2BGR);
             winname += "Y8";
+            drawed = true;
         }
         else if (subtyep == MEDIASUBTYPE_YUY2) { //YUY2
             cv::Mat src(height, width, CV_8UC2, (void*)pBuffer); //uncompress payload
             dst = cv::Mat(height, width, CV_8UC3, cv::Scalar::all(0));
             cv::cvtColor(src, dst, cv::COLOR_YUV2BGR_YUY2);
             winname += "YUY2";
+            drawed = true;
         }
         else if (subtyep == MEDIASUBTYPE_M420) { //M420
                                                  //M420 frame size 17x2
@@ -252,17 +267,22 @@ void showStillImage(int width, int height, GUID subtyep, BYTE *pBuffer, long lBu
             dst = cv::Mat(height, width, CV_8UC3, cv::Scalar::all(0));
             cv::cvtColor(src, dst, cv::COLOR_YUV2BGR_NV12);
             winname += "M420";
+            drawed = true;
         }
     }
 
-    cv::namedWindow(winname, WINDOW_AUTOSIZE);
-    cv::imshow(winname, dst);
+    if (drawed) {
+        //printf("stillimage cols %d rows %d\n", dst.cols, dst.rows);
+        //cv::namedWindow(winname, WINDOW_AUTOSIZE);
+        if (dst.rows != 0 && dst.cols != 0) {
+            cv::imshow(winname, dst);
+            int cvkey = cv::waitKey(1) & 0xFF;
 
-    int cvkey = cv::waitKey(1) & 0xFF;
-
-    if (27 == cvkey) { //27 for ASCII ESC
-        cv::destroyAllWindows();
-        showStillImageExecute = false;
+            if (27 == cvkey) { //27 for ASCII ESC
+                cv::destroyAllWindows();
+                showStillImageExecute = false;
+            }
+        }
     }
 }
 
@@ -271,6 +291,9 @@ static int stillImageCallback(double time, BYTE *buff, LONG len){
         memcpy(cpBufferStill, buff, len);
         cpBufferLenStill = len;
     }
+
+    CameraSetStillImageCallback(NULL);
+    printf("set sillimage callback NULL\n");
 
     return 0;
 }
@@ -498,8 +521,8 @@ int main(int argc, char **argv)
             goto End;
         }
 
-        printf("set sillimage callback\n");
-        CameraSetStillImageCallback(stillImageCallback);
+        printf("set sillimage callback NULL\n");
+        CameraSetStillImageCallback(NULL);
 
         ret = CameraSetStillImageFormat(stillimageWidth, stillimageHeight, stillimageSubtype);
         
@@ -584,6 +607,12 @@ End:
         if (enableStillImage && cpBufferLenStill == 0 &&
             (frameCount % STILLIMAGE_LOOP) == stillimageLoop)
         {
+            printf("set video callback NULL\n");
+            CameraSetVideoCallback(NULL);
+
+            printf("set sillimage callback\n");
+            CameraSetStillImageCallback(stillImageCallback);
+
             printf("frameCount[%d] trigger still image\n", frameCount);
             CameraTriggerStillImage();
             stillimageLoop--;
@@ -610,6 +639,8 @@ End:
             printf("stillimage[%d] w:%d h:%d size:%d\n", stillimageCount, stillimageWidth, stillimageHeight, len);
             cpBufferLenStill = 0;
             stillimageCount++;
+            printf("set video callback\n");
+            CameraSetVideoCallback(videoCallback);
         }
 #endif
 #if 0

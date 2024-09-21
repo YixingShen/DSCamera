@@ -822,9 +822,9 @@ bool CameraEnableStillImage(void)
     hr = g_pGrabberStill->SetBufferSamples(FALSE);
     CHECK_HR_RET_FALSE(hr);
 
-    int nMode = 1; //0--SampleCB,1--BufferCB
-    hr = g_pGrabberStill->SetCallback(g_pSampleGrabCallbackStill, nMode);
-    CHECK_HR_RET_FALSE(hr);
+    // int nMode = 1; //0--SampleCB,1--BufferCB
+    // hr = g_pGrabberStill->SetCallback(g_pSampleGrabCallbackStill, nMode);
+    // CHECK_HR_RET_FALSE(hr);
 
     g_IsEnabledStill = TRUE;
     return true;
@@ -842,6 +842,10 @@ done:
 bool CameraTriggerStillImage(void)
 {
     HRESULT hr;
+
+    int nMode = 1; //0--SampleCB,1--BufferCB
+    hr = g_pGrabberStill->SetCallback(g_pSampleGrabCallbackStill, nMode);
+    CHECK_HR_RET_FALSE(hr);
 
     IPin *pStillPinOut = NULL;
     hr = FindPinByName(g_pSrcFilter, PINDIR_OUTPUT, &pStillPinOut, "Still");
