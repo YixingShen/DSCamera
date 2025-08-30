@@ -87,6 +87,12 @@ bool CameraSetDeviceStream(int deviceIndex, int srcPinOut);
 
 bool CameraStartStream(void);
 
+void CameraGetFormatList(FormatList *list);
+
+bool CameraSetFormat(int formatIndex);
+
+bool CameraSetFrameRate(int frameRate);
+
 bool CameraGetGrabFormat(Format* format);
 
 bool CameraSetGrabFormat(int Width, int Height, GUID MediaSubtype);

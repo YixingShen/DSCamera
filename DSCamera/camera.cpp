@@ -549,7 +549,6 @@ static HRESULT EnumDevice(void)
             if (SUCCEEDED(hr))
             {
                 if (g_DeviceList.DeviceNum < MaxDeviceNum) {
-                    //USES_CONVERSION;
                     g_DeviceList.DeviceItems[g_DeviceList.DeviceNum].FriendlyName = W2T(varName.bstrVal);
 
                     if SUCCEEDED(hr_)

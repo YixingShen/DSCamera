@@ -41,6 +41,7 @@ static volatile bool showFrameExecute = true;
 static BYTE *cpBuffer = NULL;
 static volatile LONG cpBufferLen = 0;
 static volatile LONG cpBufferLenMax = 0;
+bool CompareGuid(GUID guid1, GUID guid2);
 
 void saveFrame(int32_t frameIndex, GUID subtyep, BYTE *pBuffer, long lBufferSize)
 {
@@ -328,10 +329,26 @@ void usage_long_options() {
 #if defined(SUPPORT_STILL_IMAGE)
     printf(" --stillimage ENABLE              enable sitll image (default=0)\n");
 #endif
+    printf(" --deviceName STR                 specify device name (e.g., USB Camera)\n");
     printf(" --help                           help message\n");
     printf("\n");
     printf("Example:\n");
     printf(" DSCamera --device=0 --type=YUY2 --framerate=30\n");
+}
+
+void lptstr2str(LPTSTR tch, char* &pch)
+{
+#ifndef UNICODE
+    std::memcpy(pch, tch, strlen(tch) + 1);
+#else
+    size_t n =
+        sizeof(TCHAR) / sizeof(char)* wcsnlen(tch, std::string::npos);
+    pch = new char[n + 1];
+    std::memcpy(pch, tch, n + 1);
+    size_t len = n - std::count(pch, pch + n, NULL);
+    std::remove(pch, pch + n, NULL);
+    pch[len] = NULL;
+#endif
 }
 
 int main(int argc, char **argv)
@@ -348,6 +365,8 @@ int main(int argc, char **argv)
     GUID stillimageSubtype = DEFAULT_FRAME_SUBTYPE;
     int stillimageLoop = (STILLIMAGE_LOOP - 1);
 #endif
+    char *deviceName = "";
+    bool findDeviceByDeviceName = false;
     char* videoType = "";
     DeviceList dlist;
     int opt;
@@ -449,6 +468,29 @@ int main(int argc, char **argv)
         printf("  %ls\n", dlist.DeviceItems[idx].DevicePath);
     }
 
+    if (findDeviceByDeviceName) {
+        printf("find device by deviceName %s\n", deviceName);
+
+        UINT32 selectedVal = 0xFFFFFFFF;
+        for (UINT32 i = 0; i < dlist.DeviceNum; i++) {
+            char* strFriendlyName;
+            lptstr2str(dlist.DeviceItems[i].FriendlyName, strFriendlyName);
+            printf("%d: %s\n", i, strFriendlyName);
+
+            if (!(strcmp(strFriendlyName, deviceName)))
+                selectedVal = i;
+        }
+        if (selectedVal != 0xFFFFFFFF) {
+            printf("Found \"%s\"\n", deviceName);
+            deviceIndex = selectedVal;
+        }
+        else {
+            printf("Did not find \"%s\"\n", deviceName);
+            CameraCloseInterface();
+            goto End;
+        }
+    }
+
     printf("request device[%d]\n", deviceIndex);
     ret = CameraSetDevice(deviceIndex);
 
@@ -468,19 +510,82 @@ int main(int argc, char **argv)
         goto End;
     }
 
+    printf("List Camera Format\n");
+    FormatList list;
+    CameraGetFormatList(&list);
+
+    if (list.FormatNum > 0) {
+        int formatIndex[3] = { -1, -1, -1 };
+
+        for (int i = 0; i < list.FormatNum; i++) {
+            printf(" [%d] Width %d Height %d\n", i, list.FormatItems[i].Width,
+                list.FormatItems[i].Height);
+            printf("   subtype:%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X\n",
+                list.FormatItems[i].MediaSubtype.Data1,
+                list.FormatItems[i].MediaSubtype.Data2,
+                list.FormatItems[i].MediaSubtype.Data3,
+                list.FormatItems[i].MediaSubtype.Data4[0],
+                list.FormatItems[i].MediaSubtype.Data4[1],
+                list.FormatItems[i].MediaSubtype.Data4[2],
+                list.FormatItems[i].MediaSubtype.Data4[3],
+                list.FormatItems[i].MediaSubtype.Data4[4],
+                list.FormatItems[i].MediaSubtype.Data4[5],
+                list.FormatItems[i].MediaSubtype.Data4[6],
+                list.FormatItems[i].MediaSubtype.Data4[7]);
+
+            if (CompareGuid(frameSubtype, list.FormatItems[i].MediaSubtype))
+            {
+                formatIndex[0] = i;
+                printf("--type is matched\n");
+
+                if (list.FormatItems[i].Width == frameWidth && list.FormatItems[i].Height == frameHeight)
+                {
+                    formatIndex[1] = i;
+                    printf("--width and --height are matched\n");
+
+                    if (list.FormatItems[i].AvgTimePerFrame == (LONGLONG)(10000000 / frameRate))
+                    {
+                        formatIndex[2] = i;
+                        printf("--framerate is matched\n");
+                    }
+                }
+            }
+        }
+
+        int matchedItem = 0;
+        if (formatIndex[0] >= 0) { matchedItem = 1; }
+        if (formatIndex[1] >= 0) { matchedItem = 2; }
+        if (formatIndex[2] >= 0) { matchedItem = 3; }
+
+        if (matchedItem > 0) {
+            printf("Found Format[%d] has %d matched item\n", formatIndex[matchedItem - 1], matchedItem);
+            ret = CameraSetFormat(formatIndex[matchedItem - 1]);
+            if (!ret) {
+                printf("failed to CameraSetFormat !\n");
+                goto End;
+            }
+        }
+        else {
+            printf("Did not find matched --type in Camera Format List\n");
+        }
+    }
+    else {
+        printf("Did find Camera Format List\n");
+    }
+
     ret = CameraSetGrabFormat(frameWidth, frameHeight, frameSubtype);
 
     if (!ret) {
         printf("failed to SetGrabFormat !\n");
         goto End;
     }
-    
+#if false
     ret = CameraSetGrabFrameRate(frameRate);
     if (!ret) {
         printf("failed to SetGrabFrameRate !\n");
         goto End;
     }
-
+#endif
     printf("get current grabber format\n");
     ZeroMemory(&framefmt, sizeof(framefmt));
     ret = CameraGetGrabFormat(&framefmt);
@@ -658,4 +763,24 @@ End:
     }
 
     return 0;
+}
+
+bool CompareGuid(GUID guid1, GUID guid2)
+{
+    if (guid1.Data1 == guid2.Data1 &&
+        guid1.Data2 == guid2.Data2 &&
+        guid1.Data3 == guid2.Data3 &&
+        guid1.Data4[0] == guid2.Data4[0] &&
+        guid1.Data4[1] == guid2.Data4[1] &&
+        guid1.Data4[2] == guid2.Data4[2] &&
+        guid1.Data4[3] == guid2.Data4[3] &&
+        guid1.Data4[4] == guid2.Data4[4] &&
+        guid1.Data4[5] == guid2.Data4[5] &&
+        guid1.Data4[6] == guid2.Data4[6] &&
+        guid1.Data4[7] == guid2.Data4[7])
+    {
+        return true;
+    }
+
+    return false;
 }
