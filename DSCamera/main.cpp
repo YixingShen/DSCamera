@@ -11,6 +11,8 @@
 #include "ksmedia.h"
 #include "camera.hpp"
 #include "getopt.h"
+#include <conio.h>
+#include <stdio.h>
 
 #if _DEBUG
 #pragma comment(lib, "../opencv/build/x64/vc14/lib/opencv_world460d.lib")
@@ -26,22 +28,33 @@
 #define DEFAULT_FRAME_WIDTH   320
 #define DEFAULT_FRAME_HEIGHT  240
 #define DEFAULT_FRAME_SUBTYPE MEDIASUBTYPE_YUY2
-#define DEFAULT_STILLIMAGE_EN 0
-
+#define DEFAULT_STILLIMAGE_EN 1
+#define DEFAULT_CAPTRUE_MAXNUM 10
 #define SAVE_FRAME_DIR        L"./saveframe"
-#define STILLIMAGE_LOOP       100 // must be more than 1
 
 using namespace std;
 using namespace chrono;
 using namespace cv;
 
+#define QUEUE_FRAM_NUM      (3)
+
+typedef struct {
+    BYTE * buffer;
+    int size;
+} queue_t;
+
 static Format framefmt;
 static volatile bool saveFrameExecute = false;
 static volatile bool showFrameExecute = true;
 static BYTE *cpBuffer = NULL;
-static volatile LONG cpBufferLen = 0;
 static volatile LONG cpBufferLenMax = 0;
+static LONG captureMaxNum = 0;
+BOOL WINAPI CtrlHandler(DWORD fdwCtrlType);
 bool CompareGuid(GUID guid1, GUID guid2);
+static volatile int frame_iptr = 0;
+static volatile int frame_optr = 0;
+static volatile int frame_count = 0;
+queue_t queueframe[QUEUE_FRAM_NUM];
 
 void saveFrame(int32_t frameIndex, GUID subtyep, BYTE *pBuffer, long lBufferSize)
 {
@@ -158,11 +171,34 @@ void showFrame(int width, int height, GUID subtyep, BYTE *pBuffer, long lBufferS
 
 static int videoCallback(double time, BYTE *buff, LONG len)
 {
-    if (cpBufferLen == 0 && cpBufferLenMax >= len) {
-        memcpy(cpBuffer, buff, len);
-        cpBufferLen = len;
+    static int count = 0;
+    static auto last_time = system_clock::now();
+    static float fps = 0;
+    count++;
+
+    if (count == 10) {
+        auto cur_time = system_clock::now();
+        auto dt_us = duration_cast<microseconds>(cur_time - last_time);
+        int32_t dt_us_v = (int32_t)dt_us.count();
+        fps = dt_us_v == 0 ? 0 : ((1000000.0f / (dt_us_v / 10)));
+        count = 0;
+        last_time = cur_time;
     }
 
+    printf("frame[%d] size:%d fps:%0.02f @ %d frames\n", frame_count, len, fps, 10);
+    const int pre_frame_iptr = ((frame_iptr + 1) >= QUEUE_FRAM_NUM) ? 0 : (frame_iptr + 1);
+    if (pre_frame_iptr == frame_optr) {
+      printf("skip frame");
+    }
+    else {
+      queueframe[frame_iptr].buffer = (BYTE *)(cpBuffer + (cpBufferLenMax*frame_iptr));
+      queueframe[frame_iptr].size = len;
+      BYTE * dst = (BYTE *)(cpBuffer + (cpBufferLenMax*frame_iptr));
+      memcpy(queueframe[frame_iptr].buffer, buff, len);
+      frame_iptr = pre_frame_iptr;
+    }
+
+    frame_count++;
     return 0;
 }
 
@@ -172,8 +208,12 @@ static volatile bool saveStillImageExecute = false;
 static volatile bool showStillImageExecute = true;
 static int enableStillImage = DEFAULT_STILLIMAGE_EN;
 static BYTE *cpBufferStill = NULL;
-static volatile LONG cpBufferLenStill = 0;
 static volatile LONG cpBufferLenMaxStill = 0;
+static LONG captureMaxNum_Still = 0;
+queue_t queueframeStill[QUEUE_FRAM_NUM];
+static volatile int stillframe_iptr = 0;
+static volatile int stillframe_optr = 0;
+static volatile int stillframe_count = 0;
 
 void saveStillImage(int32_t frameIndex, GUID subtyep, BYTE *pBuffer, long lBufferSize)
 {
@@ -287,15 +327,22 @@ void showStillImage(int width, int height, GUID subtyep, BYTE *pBuffer, long lBu
     }
 }
 
-static int stillImageCallback(double time, BYTE *buff, LONG len){
-    if (cpBufferLenStill == 0 && cpBufferLenMaxStill >= len) {
-        memcpy(cpBufferStill, buff, len);
-        cpBufferLenStill = len;
+static int stillImageCallback(double time, BYTE *buff, LONG len) {
+    printf("stillframe[%d] size:%d\n", stillframe_count, len);
+
+    const int pre_stillframe_iptr = ((stillframe_iptr + 1) >= QUEUE_FRAM_NUM) ? 0 : (stillframe_iptr + 1);
+    if (pre_stillframe_iptr == stillframe_optr) {
+        printf("skip stillframe\n");
+    }
+    else {
+        queueframeStill[stillframe_iptr].buffer = (BYTE *)(cpBufferStill + (cpBufferLenMaxStill*stillframe_iptr));
+        queueframeStill[stillframe_iptr].size = len;
+        BYTE * dst = (BYTE *)(cpBufferStill + (cpBufferLenMaxStill*stillframe_iptr));
+        memcpy(queueframeStill[stillframe_iptr].buffer, buff, len);
+        stillframe_iptr = pre_stillframe_iptr;
     }
 
-    CameraSetStillImageCallback(NULL);
-    printf("set sillimage callback NULL\n");
-
+    stillframe_count++;
     return 0;
 }
 #endif
@@ -351,6 +398,13 @@ void lptstr2str(LPTSTR tch, char* &pch)
 #endif
 }
 
+int getch_noblock() {
+    if (_kbhit())
+        return _getch();
+    else
+        return -1;
+}
+
 int main(int argc, char **argv)
 {  
     int deviceIndex = DEFAULT_DEVICE_IDX;
@@ -363,11 +417,12 @@ int main(int argc, char **argv)
     int stillimageWidth = DEFAULT_FRAME_WIDTH;
     int stillimageHeight = DEFAULT_FRAME_HEIGHT;
     GUID stillimageSubtype = DEFAULT_FRAME_SUBTYPE;
-    int stillimageLoop = (STILLIMAGE_LOOP - 1);
+    captureMaxNum_Still = DEFAULT_CAPTRUE_MAXNUM;
 #endif
+    captureMaxNum = DEFAULT_CAPTRUE_MAXNUM;
     char *deviceName = "";
     bool findDeviceByDeviceName = false;
-    char* videoType = "";
+    char* videoType = "MJPEG";
     DeviceList dlist;
     int opt;
     int cnt = 0;
@@ -437,15 +492,20 @@ int main(int argc, char **argv)
         frameSubtype = MEDIASUBTYPE_Y8;
     }
 
-    if (PathIsDirectory(SAVE_FRAME_DIR))
+    if (PathIsDirectory(SAVE_FRAME_DIR)) {
         saveFrameExecute = true;
-    else
+        saveStillImageExecute = true;
+    }
+    else {
         saveFrameExecute = false;
+        saveStillImageExecute = false;
+    }
 
     bool ret;
 
     printf("create interface\n");
     ret = CameraCreateInterface();
+    SetConsoleCtrlHandler(CtrlHandler, TRUE);
 
     if (!ret) {
         printf("failed to CameraCreateInterface!\n");
@@ -614,9 +674,16 @@ int main(int argc, char **argv)
         frameSubtype.Data4[7]);
 
     cpBufferLenMax = frameWidth * frameHeight * 3;
-    cpBuffer = (BYTE *)malloc(cpBufferLenMax);
-    cpBufferLen = 0;
+    cpBuffer = (BYTE *)malloc(cpBufferLenMax * QUEUE_FRAM_NUM);
+    frame_count = 0;
+    BYTE *frame = (BYTE *)malloc(cpBufferLenMax);
 #if defined(SUPPORT_STILL_IMAGE)
+    stillframe_count = 0;
+    BYTE *stillframe = NULL;
+    stillimageWidth = frameWidth;
+    stillimageHeight = frameHeight;
+    stillimageSubtype = frameSubtype;
+
     if (enableStillImage == 1) {
         printf("enable still image\n");
         ret = CameraEnableStillImage();
@@ -663,8 +730,11 @@ int main(int argc, char **argv)
             stillimageSubtype.Data4[7]);
 
         cpBufferLenMaxStill = stillimageWidth * stillimageHeight * 3;
-        cpBufferStill = (BYTE *)malloc(cpBufferLenMaxStill);
-        cpBufferLenStill = 0;
+        cpBufferStill = (BYTE *)malloc(cpBufferLenMaxStill * QUEUE_FRAM_NUM);
+        stillframe = (BYTE *)malloc(cpBufferLenMaxStill);
+
+        CameraSetStillImageCallback(stillImageCallback);
+        printf("press kye '1' to trigger still image\n");
     }
 #endif
     printf("start stream\n");
@@ -674,78 +744,57 @@ int main(int argc, char **argv)
         printf("failed to StartStream !\n");
         goto End;
     }
-End:
 
     while (1) {
         //this_thread::sleep_for(chrono::seconds(1));
-        static int32_t frameCount = 0;
 
-        if (cpBufferLen) {
-            LONG len = cpBufferLen;
-            BYTE *buff = cpBuffer;
+        if (frame_optr != frame_iptr) {
+            queueframe[frame_optr].buffer = (BYTE *)(cpBuffer + (cpBufferLenMax*frame_optr));
+            int len = queueframe[frame_optr].size;
+            memcpy(frame, queueframe[frame_optr].buffer, len);
+            frame_optr++;
+            frame_optr = frame_optr >= QUEUE_FRAM_NUM ? 0 : frame_optr;
 
-            if (buff != NULL && len > 0 && \
-                frameSubtype != MEDIASUBTYPE_NONE && \
+            if (frameSubtype != MEDIASUBTYPE_NONE && \
                 frameWidth != 0 && frameHeight != 0) {
 
                 if (showFrameExecute)
-                    showFrame(frameWidth, frameHeight, frameSubtype, buff, len);
+                    showFrame(frameWidth, frameHeight, frameSubtype, frame, len);
 
-                if (saveFrameExecute)
-                    saveFrame(frameCount, frameSubtype, buff, len);
+                if (saveFrameExecute && captureMaxNum > 0) {
+                    saveFrame(frame_count, frameSubtype, frame, len);
+                    captureMaxNum--;
+                }
             }
-
-            cpBufferLen = 0;
-
-            static auto last_time = system_clock::now();
-            auto cur_time = system_clock::now();
-            auto dt = duration_cast<milliseconds>(cur_time - last_time);
-            int32_t dt_v = (int32_t)dt.count();
-            last_time = cur_time;
-
-            printf("frame[%d] w:%d h:%d size:%d fps:%0.02f\n",
-                frameCount, frameWidth, frameHeight, len, dt_v == 0 ? 0 : (1000.0f / dt_v));
-
-            frameCount++;
         }
 #if defined(SUPPORT_STILL_IMAGE)
-        if (enableStillImage && cpBufferLenStill == 0 &&
-            (frameCount % STILLIMAGE_LOOP) == stillimageLoop)
+        if (enableStillImage && (frame_optr == frame_iptr) && getch_noblock() == (int)'1')
         {
-            printf("set video callback NULL\n");
-            CameraSetVideoCallback(NULL);
-
-            printf("set sillimage callback\n");
-            CameraSetStillImageCallback(stillImageCallback);
-
-            printf("frameCount[%d] trigger still image\n", frameCount);
+            printf("stillframe_count[%d] trigger still image\n", stillframe_count);
             CameraTriggerStillImage();
-            stillimageLoop--;
-            if (stillimageLoop > (STILLIMAGE_LOOP - 1)) stillimageLoop = 1;
-            if (stillimageLoop < 1) stillimageLoop = (STILLIMAGE_LOOP - 1);
         }
 
-        if (cpBufferLenStill) {
-            static int32_t stillimageCount = 0;
-            LONG len = cpBufferLenStill;
+        if (stillframe_optr != stillframe_iptr) {
+            queueframeStill[stillframe_optr].buffer = (BYTE *)(cpBufferStill + (cpBufferLenMaxStill*stillframe_optr));
+            int len = queueframeStill[stillframe_optr].size;
+            memcpy(stillframe, queueframeStill[stillframe_optr].buffer, len);
+            const int pre_stillframe_optr = ((stillframe_optr + 1) >= QUEUE_FRAM_NUM) ? 0 : (stillframe_optr + 1);
+            stillframe_optr = pre_stillframe_optr;
             BYTE *buff = cpBufferStill;
 
-            if (buff != NULL && len > 0 && \
-                stillimageSubtype != MEDIASUBTYPE_NONE && \
+            if (stillimageSubtype != MEDIASUBTYPE_NONE && \
                 stillimageWidth != 0 && stillimageHeight != 0) {
 
                 if (showStillImageExecute)
                     showStillImage(stillimageWidth, stillimageHeight, stillimageSubtype, buff, len);
 
-                if (saveStillImageExecute)
-                    saveStillImage(stillimageCount, stillimageSubtype, buff, len);
+                if (saveStillImageExecute && captureMaxNum_Still > 0) {
+                    saveStillImage(stillframe_count, stillimageSubtype, buff, len);
+                    captureMaxNum_Still--;
+                }
             }
 
-            printf("stillimage[%d] w:%d h:%d size:%d\n", stillimageCount, stillimageWidth, stillimageHeight, len);
-            cpBufferLenStill = 0;
-            stillimageCount++;
-            printf("set video callback\n");
-            CameraSetVideoCallback(videoCallback);
+            printf("stillimage[%d] size:%d\n", stillframe_count, len);
         }
 #endif
 #if 0
@@ -762,7 +811,24 @@ End:
 #endif
     }
 
+End:
+    printf("close interface\n");
+    CameraCloseInterface();
     return 0;
+}
+
+BOOL WINAPI CtrlHandler(DWORD fdwCtrlType)
+{
+    switch (fdwCtrlType)
+    {
+    case CTRL_C_EVENT:
+    case CTRL_CLOSE_EVENT:
+        CameraCloseInterface();
+        return TRUE;
+
+    default:
+        return FALSE;
+    }
 }
 
 bool CompareGuid(GUID guid1, GUID guid2)
