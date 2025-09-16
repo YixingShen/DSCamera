@@ -116,7 +116,7 @@ void showFrame(int width, int height, GUID subtyep, BYTE *pBuffer, long lBufferS
             drawed = true;
         }
         else if (subtyep == MEDIASUBTYPE_M420) { //M420
-            //M420 frame size 17x2
+            //M420 frame size 16x2
             //start +  0 : Y・00  Y・01  Y・02  Y・03
             //start +  4 : Y・10  Y・11  Y・12  Y・13
             //start +  8 : Cb00  Cr00  Cb01  Cr01
@@ -124,7 +124,7 @@ void showFrame(int width, int height, GUID subtyep, BYTE *pBuffer, long lBufferS
             //start + 20 : Y・30  Y・31  Y・32  Y・33
             //start + 24 : Cb10  Cr10  Cb11  Cr11
 
-            //NV12 frame size 17x2
+            //NV12 frame size 16x2
             //start + 0  : Y・00  Y・01  Y・02  Y・03
             //start + 4  : Y・10  Y・11  Y・12  Y・13
             //start + 8  : Y・20  Y・21  Y・22  Y・23
@@ -274,21 +274,21 @@ void showStillImage(int width, int height, GUID subtyep, BYTE *pBuffer, long lBu
             drawed = true;
         }
         else if (subtyep == MEDIASUBTYPE_M420) { //M420
-                                                 //M420 frame size 17x2
-                                                 //start +  0 : Y・00  Y・01  Y・02  Y・03
-                                                 //start +  4 : Y・10  Y・11  Y・12  Y・13
-                                                 //start +  8 : Cb00  Cr00  Cb01  Cr01
-                                                 //start + 16 : Y・20  Y・21  Y・22  Y・23
-                                                 //start + 20 : Y・30  Y・31  Y・32  Y・33
-                                                 //start + 24 : Cb10  Cr10  Cb11  Cr11
+            //M420 frame size 16x2
+            //start +  0 : Y・00  Y・01  Y・02  Y・03
+            //start +  4 : Y・10  Y・11  Y・12  Y・13
+            //start +  8 : Cb00  Cr00  Cb01  Cr01
+            //start + 16 : Y・20  Y・21  Y・22  Y・23
+            //start + 20 : Y・30  Y・31  Y・32  Y・33
+            //start + 24 : Cb10  Cr10  Cb11  Cr11
 
-                                                 //NV12 frame size 17x2
-                                                 //start + 0  : Y・00  Y・01  Y・02  Y・03
-                                                 //start + 4  : Y・10  Y・11  Y・12  Y・13
-                                                 //start + 8  : Y・20  Y・21  Y・22  Y・23
-                                                 //start + 12 : Y・30  Y・31  Y・32  Y・33
-                                                 //start + 16 : Cb00  Cr00  Cb01  Cr01
-                                                 //start + 20 : Cb10  Cr10  Cb11  Cr11
+            //NV12 frame size 16x2
+            //start + 0  : Y・00  Y・01  Y・02  Y・03
+            //start + 4  : Y・10  Y・11  Y・12  Y・13
+            //start + 8  : Y・20  Y・21  Y・22  Y・23
+            //start + 12 : Y・30  Y・31  Y・32  Y・33
+            //start + 16 : Cb00  Cr00  Cb01  Cr01
+            //start + 20 : Cb10  Cr10  Cb11  Cr11
 
             if (!pBuffer_NV12)
                 pBuffer_NV12 = (BYTE *)malloc(lBufferSize);

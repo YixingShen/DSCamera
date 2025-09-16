@@ -31,8 +31,6 @@ do {                                                                \
   }                                                                 \
 }while(0)
 
-//#define CALLBACKMODE 1
-
 static IGraphBuilder *g_pGraph;
 static ICaptureGraphBuilder2 *g_pCapture;
 static IMediaControl *g_pMC;
@@ -701,18 +699,15 @@ bool CameraStartStream(void)
     if (g_StreamOngoing)
         return true;
 
-    // CALLBACKMODE == 1
-    {
-        hr = g_pGrabber->SetOneShot(FALSE);
-        CHECK_HR_RET_FALSE(hr);
-
-        hr = g_pGrabber->SetBufferSamples(FALSE);
-        CHECK_HR_RET_FALSE(hr);
-
-        int nMode = 1; //0--SampleCB,1--BufferCB
-        hr = g_pGrabber->SetCallback(g_pSampleGrabCallback, nMode);
-        CHECK_HR_RET_FALSE(hr);
-    }
+    hr = g_pGrabber->SetOneShot(FALSE);
+    CHECK_HR_RET_FALSE(hr);
+    
+    hr = g_pGrabber->SetBufferSamples(FALSE);
+    CHECK_HR_RET_FALSE(hr);
+    
+    int nMode = 1; //0--SampleCB,1--BufferCB
+    hr = g_pGrabber->SetCallback(g_pSampleGrabCallback, nMode);
+    CHECK_HR_RET_FALSE(hr);
 
     hr = g_pMC->Run();
     CHECK_HR_RET_FALSE(hr);
@@ -743,16 +738,6 @@ bool CameraEnableStillImage(void)
     IPin *pGrabPinIn = NULL;
     IPin *pGrabPinOut = NULL;
     IPin *pRenderPinIn = NULL;
-
-    //hr = g_pCapture->FindPin(
-    //    g_pSrcFilter,                  // Filter.
-    //    PINDIR_OUTPUT,         // Look for an output pin.
-    //    &PIN_CATEGORY_STILL,   // Pin category.
-    //    NULL,                  // Media type (don't care).
-    //    FALSE,                 // Pin must be unconnected.
-    //    0,                     // Get the 0'th pin.
-    //    &pStillPinOut                  // Receives a pointer to thepin.
-    //);
 
     //hr = g_pSrcFilter->QueryInterface(IID_IAMVideoControl, (LPVOID*)&g_pVC);
     //CHECK_HR_GO_DONE(hr);
