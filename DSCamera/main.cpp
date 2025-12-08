@@ -55,6 +55,8 @@ static volatile int frame_iptr = 0;
 static volatile int frame_optr = 0;
 static volatile int frame_count = 0;
 queue_t queueframe[QUEUE_FRAM_NUM];
+static BYTE *frame_sort = NULL;
+static GUID frameSubtype = DEFAULT_FRAME_SUBTYPE;
 
 void saveFrame(int32_t frameIndex, GUID subtyep, BYTE *pBuffer, long lBufferSize)
 {
@@ -132,8 +134,9 @@ void showFrame(int width, int height, GUID subtyep, BYTE *pBuffer, long lBufferS
             //start + 16 : Cb00  Cr00  Cb01  Cr01
             //start + 20 : Cb10  Cr10  Cb11  Cr11
 
-            if (!pBuffer_NV12)
-                pBuffer_NV12 = (BYTE *)malloc(lBufferSize);
+            pBuffer_NV12 = frame_sort;
+            //if (!pBuffer_NV12)
+            //    pBuffer_NV12 = (BYTE *)malloc(lBufferSize);
 
             int nv12_uv_planar_pos = width * height;
             int m420_y = 0;
@@ -193,12 +196,15 @@ static int videoCallback(double time, BYTE *buff, LONG len)
     else {
       queueframe[frame_iptr].buffer = (BYTE *)(cpBuffer + (cpBufferLenMax*frame_iptr));
       queueframe[frame_iptr].size = len;
-      BYTE * dst = (BYTE *)(cpBuffer + (cpBufferLenMax*frame_iptr));
       memcpy(queueframe[frame_iptr].buffer, buff, len);
       frame_iptr = pre_frame_iptr;
     }
 
     frame_count++;
+    if (saveFrameExecute && captureMaxNum > 0) {
+        saveFrame(frame_count, frameSubtype, buff, len);
+        captureMaxNum--;
+    }
     return 0;
 }
 
@@ -214,6 +220,8 @@ queue_t queueframeStill[QUEUE_FRAM_NUM];
 static volatile int stillframe_iptr = 0;
 static volatile int stillframe_optr = 0;
 static volatile int stillframe_count = 0;
+static BYTE *stillframe_sort = NULL;
+static GUID stillimageSubtype = DEFAULT_FRAME_SUBTYPE;
 
 void saveStillImage(int32_t frameIndex, GUID subtyep, BYTE *pBuffer, long lBufferSize)
 {
@@ -290,8 +298,9 @@ void showStillImage(int width, int height, GUID subtyep, BYTE *pBuffer, long lBu
             //start + 16 : Cb00  Cr00  Cb01  Cr01
             //start + 20 : Cb10  Cr10  Cb11  Cr11
 
-            if (!pBuffer_NV12)
-                pBuffer_NV12 = (BYTE *)malloc(lBufferSize);
+            pBuffer_NV12 = stillframe_sort;
+            //if (!pBuffer_NV12)
+            //    pBuffer_NV12 = (BYTE *)malloc(lBufferSize);
 
             int nv12_uv_planar_pos = width * height;
             int m420_y = 0;
@@ -337,12 +346,15 @@ static int stillImageCallback(double time, BYTE *buff, LONG len) {
     else {
         queueframeStill[stillframe_iptr].buffer = (BYTE *)(cpBufferStill + (cpBufferLenMaxStill*stillframe_iptr));
         queueframeStill[stillframe_iptr].size = len;
-        BYTE * dst = (BYTE *)(cpBufferStill + (cpBufferLenMaxStill*stillframe_iptr));
         memcpy(queueframeStill[stillframe_iptr].buffer, buff, len);
         stillframe_iptr = pre_stillframe_iptr;
     }
 
     stillframe_count++;
+    if (saveStillImageExecute && captureMaxNum_Still > 0) {
+        saveStillImage(stillframe_count, stillimageSubtype, buff, len);
+        captureMaxNum_Still--;
+    }
     return 0;
 }
 #endif
@@ -412,11 +424,11 @@ int main(int argc, char **argv)
     int frameRate = DEFAULT_FRAME_RATE;
     int frameWidth = DEFAULT_FRAME_WIDTH;
     int frameHeight = DEFAULT_FRAME_HEIGHT;
-    GUID frameSubtype = DEFAULT_FRAME_SUBTYPE;
+    frameSubtype = DEFAULT_FRAME_SUBTYPE;
 #if defined(SUPPORT_STILL_IMAGE)
     int stillimageWidth = DEFAULT_FRAME_WIDTH;
     int stillimageHeight = DEFAULT_FRAME_HEIGHT;
-    GUID stillimageSubtype = DEFAULT_FRAME_SUBTYPE;
+    stillimageSubtype = DEFAULT_FRAME_SUBTYPE;
     captureMaxNum_Still = DEFAULT_CAPTRUE_MAXNUM;
 #endif
     captureMaxNum = DEFAULT_CAPTRUE_MAXNUM;
@@ -677,6 +689,19 @@ int main(int argc, char **argv)
     cpBuffer = (BYTE *)malloc(cpBufferLenMax * QUEUE_FRAM_NUM);
     frame_count = 0;
     BYTE *frame = (BYTE *)malloc(cpBufferLenMax);
+    frame_sort = (BYTE *)malloc(cpBufferLenMax);
+    if (!cpBuffer) {
+        printf("failed to alloc queue frame\n");
+        goto End;
+    }
+    if (!frame) {
+        printf("failed to alloc frame\n");
+        goto End;
+    }
+    if (!frame_sort) {
+        printf("failed to alloc frame sort\n");
+        goto End;
+    }
 #if defined(SUPPORT_STILL_IMAGE)
     stillframe_count = 0;
     BYTE *stillframe = NULL;
@@ -732,7 +757,19 @@ int main(int argc, char **argv)
         cpBufferLenMaxStill = stillimageWidth * stillimageHeight * 3;
         cpBufferStill = (BYTE *)malloc(cpBufferLenMaxStill * QUEUE_FRAM_NUM);
         stillframe = (BYTE *)malloc(cpBufferLenMaxStill);
-
+        stillframe_sort = (BYTE *)malloc(cpBufferLenMaxStill);
+        if (!cpBufferStill) {
+            printf("failed to alloc queue still frame\n");
+            goto End;
+        }
+        if (!stillframe) {
+            printf("failed to alloc still frame\n");
+            goto End;
+        }
+        if (!stillframe_sort) {
+            printf("failed to alloc still frame sort\n");
+            goto End;
+        }
         CameraSetStillImageCallback(stillImageCallback);
         printf("press kye '1' to trigger still image\n");
     }
@@ -752,18 +789,12 @@ int main(int argc, char **argv)
             queueframe[frame_optr].buffer = (BYTE *)(cpBuffer + (cpBufferLenMax*frame_optr));
             int len = queueframe[frame_optr].size;
             memcpy(frame, queueframe[frame_optr].buffer, len);
-            frame_optr++;
-            frame_optr = frame_optr >= QUEUE_FRAM_NUM ? 0 : frame_optr;
+            const int pre_frame_optr = ((frame_optr + 1) >= QUEUE_FRAM_NUM) ? 0 : (frame_optr + 1);
+            frame_optr = pre_frame_optr;
 
-            if (frameSubtype != MEDIASUBTYPE_NONE && \
-                frameWidth != 0 && frameHeight != 0) {
-
-                if (showFrameExecute)
+            if (frameSubtype != MEDIASUBTYPE_NONE && frameWidth != 0 && frameHeight != 0) {
+                if (showFrameExecute) {
                     showFrame(frameWidth, frameHeight, frameSubtype, frame, len);
-
-                if (saveFrameExecute && captureMaxNum > 0) {
-                    saveFrame(frame_count, frameSubtype, frame, len);
-                    captureMaxNum--;
                 }
             }
         }
@@ -780,17 +811,10 @@ int main(int argc, char **argv)
             memcpy(stillframe, queueframeStill[stillframe_optr].buffer, len);
             const int pre_stillframe_optr = ((stillframe_optr + 1) >= QUEUE_FRAM_NUM) ? 0 : (stillframe_optr + 1);
             stillframe_optr = pre_stillframe_optr;
-            BYTE *buff = cpBufferStill;
 
-            if (stillimageSubtype != MEDIASUBTYPE_NONE && \
-                stillimageWidth != 0 && stillimageHeight != 0) {
-
-                if (showStillImageExecute)
-                    showStillImage(stillimageWidth, stillimageHeight, stillimageSubtype, buff, len);
-
-                if (saveStillImageExecute && captureMaxNum_Still > 0) {
-                    saveStillImage(stillframe_count, stillimageSubtype, buff, len);
-                    captureMaxNum_Still--;
+            if (stillimageSubtype != MEDIASUBTYPE_NONE && stillimageWidth != 0 && stillimageHeight != 0) {
+                if (showStillImageExecute) {
+                    showStillImage(stillimageWidth, stillimageHeight, stillimageSubtype, stillframe, len);
                 }
             }
 
